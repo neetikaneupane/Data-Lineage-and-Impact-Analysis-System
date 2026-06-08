@@ -101,7 +101,13 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
         bgcolor="#1e1e2e",
         font_color="white"
     )
-    net.barnes_hut(gravity=-8000, central_gravity=0.2, spring_length=150)
+    net.barnes_hut(
+        gravity=-12000,
+        central_gravity=0.1,
+        spring_length=250,
+        spring_strength=0.01,
+        damping=0.09
+    )
 
     rows = client.run(
         """
@@ -120,17 +126,28 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
         tgt_table = tgt.split(".")[0]
 
         if src not in nodes:
-            net.add_node(src, label=src, color=_node_color(src_table), size=15, title=src)
+            net.add_node(
+                src,
+                label="",
+                title=src,
+                color=_node_color(src_table),
+                size=10
+            )
             nodes.add(src)
         if tgt not in nodes:
-            net.add_node(tgt, label=tgt, color=_node_color(tgt_table), size=15, title=tgt)
+            net.add_node(
+                tgt,
+                label="",
+                title=tgt,
+                color=_node_color(tgt_table),
+                size=10
+            )
             nodes.add(tgt)
 
-        net.add_edge(src, tgt, title=file, color="#555555")
+        net.add_edge(src, tgt, title=file, color="#444444")
 
     net.save_graph(output_path)
     _inject_legend(output_path)
-
 
 def _node_color(name: str) -> str:
     for prefix, color in LAYER_COLORS.items():
