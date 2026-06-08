@@ -36,6 +36,89 @@ LEGEND_HTML = """
 </div>
 """
 
+SEARCH_HTML = """
+<div style="
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: monospace;
+    font-size: 13px;
+    color: white;
+    z-index: 9999;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+">
+  <input
+    id="searchBox"
+    type="text"
+    placeholder="Search node..."
+    style="
+        background: #1e1e2e;
+        border: 1px solid #555;
+        border-radius: 4px;
+        color: white;
+        padding: 6px 10px;
+        font-family: monospace;
+        font-size: 13px;
+        width: 220px;
+        outline: none;
+    "
+  />
+  <button onclick="clearSearch()" style="
+        background: #444;
+        border: none;
+        border-radius: 4px;
+        color: white;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-family: monospace;
+  ">Clear</button>
+</div>
+
+<script>
+document.getElementById("searchBox").addEventListener("input", function() {
+    const query = this.value.toLowerCase().trim();
+    if (!query) { clearSearch(); return; }
+
+    const allNodes = network.body.data.nodes.get();
+    const updates  = [];
+
+    allNodes.forEach(function(node) {
+        const label = (node.title || node.id || "").toLowerCase();
+        const match = label.includes(query);
+        updates.push({
+            id:      node.id,
+            color:   match ? { background: "#ffffff", border: "#ffffff" } : { background: "#333344", border: "#333344" },
+            font:    match ? { color: "#000000", size: 16 } : { color: "#333344" },
+            size:    match ? 25 : 8
+        });
+    });
+
+    network.body.data.nodes.update(updates);
+});
+
+function clearSearch() {
+    document.getElementById("searchBox").value = "";
+    const allNodes = network.body.data.nodes.get();
+    const updates  = [];
+    allNodes.forEach(function(node) {
+        updates.push({
+            id:    node.id,
+            color: node._originalColor || node.color,
+            font:  { color: "white", size: 14 },
+            size:  node._originalSize  || 15
+        });
+    });
+    network.body.data.nodes.update(updates);
+}
+</script>
+"""
+
 
 def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
     client = Neo4jClient()
@@ -53,6 +136,14 @@ def _inject_legend(output_path: str):
     with open(output_path, "r") as f:
         html = f.read()
     html = html.replace("<body>", f"<body>{LEGEND_HTML}", 1)
+    with open(output_path, "w") as f:
+        f.write(html)
+
+
+def _inject_search(output_path: str):
+    with open(output_path, "r") as f:
+        html = f.read()
+    html = html.replace("<body>", f"<body>{SEARCH_HTML}", 1)
     with open(output_path, "w") as f:
         f.write(html)
 
@@ -91,6 +182,7 @@ def _export_table_graph(client: Neo4jClient, output_path: str):
 
     net.save_graph(output_path)
     _inject_legend(output_path)
+    _inject_search(output_path)
 
 
 def _export_column_graph(client: Neo4jClient, output_path: str):
@@ -148,6 +240,8 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
 
     net.save_graph(output_path)
     _inject_legend(output_path)
+    _inject_search(output_path)
+
 
 def _node_color(name: str) -> str:
     for prefix, color in LAYER_COLORS.items():
