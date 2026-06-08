@@ -2,6 +2,41 @@ from pyvis.network import Network
 from lineage.graph.neo4j_client import Neo4jClient
 
 
+LAYER_COLORS = {
+    "raw_":  "#e06c75",
+    "stg_":  "#e5c07b",
+    "dim_":  "#61afef",
+    "fct_":  "#61afef",
+    "mrt_":  "#98c379",
+    "rpt_":  "#c678dd",
+}
+DEFAULT_COLOR = "#abb2bf"
+
+LEGEND_HTML = """
+<div style="
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: monospace;
+    font-size: 13px;
+    color: white;
+    z-index: 9999;
+">
+  <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">Layer Legend</div>
+  <div><span style="color:#e06c75;">&#9679;</span> raw_   &nbsp; source tables</div>
+  <div><span style="color:#e5c07b;">&#9679;</span> stg_   &nbsp; staging</div>
+  <div><span style="color:#61afef;">&#9679;</span> dim_ / fct_  &nbsp; warehouse</div>
+  <div><span style="color:#98c379;">&#9679;</span> mrt_   &nbsp; marts</div>
+  <div><span style="color:#c678dd;">&#9679;</span> rpt_   &nbsp; reports</div>
+  <div><span style="color:#abb2bf;">&#9679;</span> other</div>
+</div>
+"""
+
+
 def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
     client = Neo4jClient()
 
@@ -12,6 +47,14 @@ def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
 
     client.close()
     print(f"Graph exported to {output_path}")
+
+
+def _inject_legend(output_path: str):
+    with open(output_path, "r") as f:
+        html = f.read()
+    html = html.replace("<body>", f"<body>{LEGEND_HTML}", 1)
+    with open(output_path, "w") as f:
+        f.write(html)
 
 
 def _export_table_graph(client: Neo4jClient, output_path: str):
@@ -47,6 +90,7 @@ def _export_table_graph(client: Neo4jClient, output_path: str):
         net.add_edge(src, tgt, title=file, color="#888888")
 
     net.save_graph(output_path)
+    _inject_legend(output_path)
 
 
 def _export_column_graph(client: Neo4jClient, output_path: str):
@@ -85,17 +129,11 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
         net.add_edge(src, tgt, title=file, color="#555555")
 
     net.save_graph(output_path)
+    _inject_legend(output_path)
 
 
 def _node_color(name: str) -> str:
-    if name.startswith("raw_"):
-        return "#e06c75"
-    if name.startswith("stg_"):
-        return "#e5c07b"
-    if name.startswith("dim_") or name.startswith("fct_"):
-        return "#61afef"
-    if name.startswith("mrt_"):
-        return "#98c379"
-    if name.startswith("rpt_"):
-        return "#c678dd"
-    return "#abb2bf"
+    for prefix, color in LAYER_COLORS.items():
+        if name.startswith(prefix):
+            return color
+    return DEFAULT_COLOR
