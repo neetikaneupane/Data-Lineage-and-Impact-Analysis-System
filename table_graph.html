@@ -1,0 +1,163 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 900px;
+                 background-color: #1e1e2e;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#e06c75", "font": {"color": "white"}, "id": "raw_customers", "label": "raw_customers", "shape": "dot", "size": 20, "title": "raw_customers"}, {"color": "#e5c07b", "font": {"color": "white"}, "id": "stg_customers", "label": "stg_customers", "shape": "dot", "size": 20, "title": "stg_customers"}, {"color": "#e06c75", "font": {"color": "white"}, "id": "raw_orders", "label": "raw_orders", "shape": "dot", "size": 20, "title": "raw_orders"}, {"color": "#e5c07b", "font": {"color": "white"}, "id": "stg_orders", "label": "stg_orders", "shape": "dot", "size": 20, "title": "stg_orders"}, {"color": "#e06c75", "font": {"color": "white"}, "id": "raw_order_items", "label": "raw_order_items", "shape": "dot", "size": 20, "title": "raw_order_items"}, {"color": "#e5c07b", "font": {"color": "white"}, "id": "stg_order_items", "label": "stg_order_items", "shape": "dot", "size": 20, "title": "stg_order_items"}, {"color": "#e06c75", "font": {"color": "white"}, "id": "raw_products", "label": "raw_products", "shape": "dot", "size": 20, "title": "raw_products"}, {"color": "#e5c07b", "font": {"color": "white"}, "id": "stg_products", "label": "stg_products", "shape": "dot", "size": 20, "title": "stg_products"}, {"color": "#e06c75", "font": {"color": "white"}, "id": "raw_payments", "label": "raw_payments", "shape": "dot", "size": 20, "title": "raw_payments"}, {"color": "#e5c07b", "font": {"color": "white"}, "id": "stg_payments", "label": "stg_payments", "shape": "dot", "size": 20, "title": "stg_payments"}, {"color": "#61afef", "font": {"color": "white"}, "id": "dim_customers", "label": "dim_customers", "shape": "dot", "size": 20, "title": "dim_customers"}, {"color": "#61afef", "font": {"color": "white"}, "id": "dim_products", "label": "dim_products", "shape": "dot", "size": 20, "title": "dim_products"}, {"color": "#61afef", "font": {"color": "white"}, "id": "fct_orders", "label": "fct_orders", "shape": "dot", "size": 20, "title": "fct_orders"}, {"color": "#61afef", "font": {"color": "white"}, "id": "fct_payments", "label": "fct_payments", "shape": "dot", "size": 20, "title": "fct_payments"}, {"color": "#61afef", "font": {"color": "white"}, "id": "fct_order_items", "label": "fct_order_items", "shape": "dot", "size": 20, "title": "fct_order_items"}, {"color": "#98c379", "font": {"color": "white"}, "id": "mrt_customer_lifetime_value", "label": "mrt_customer_lifetime_value", "shape": "dot", "size": 20, "title": "mrt_customer_lifetime_value"}, {"color": "#98c379", "font": {"color": "white"}, "id": "mrt_product_performance", "label": "mrt_product_performance", "shape": "dot", "size": 20, "title": "mrt_product_performance"}, {"color": "#98c379", "font": {"color": "white"}, "id": "mrt_daily_revenue", "label": "mrt_daily_revenue", "shape": "dot", "size": 20, "title": "mrt_daily_revenue"}, {"color": "#98c379", "font": {"color": "white"}, "id": "mrt_marketing_attribution", "label": "mrt_marketing_attribution", "shape": "dot", "size": 20, "title": "mrt_marketing_attribution"}, {"color": "#e06c75", "font": {"color": "white"}, "id": "raw_events", "label": "raw_events", "shape": "dot", "size": 20, "title": "raw_events"}, {"color": "#c678dd", "font": {"color": "white"}, "id": "rpt_executive_summary", "label": "rpt_executive_summary", "shape": "dot", "size": 20, "title": "rpt_executive_summary"}, {"color": "#c678dd", "font": {"color": "white"}, "id": "rpt_churn_risk", "label": "rpt_churn_risk", "shape": "dot", "size": 20, "title": "rpt_churn_risk"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "#888888", "from": "raw_customers", "title": "07_stg_customers.sql", "to": "stg_customers"}, {"arrows": "to", "color": "#888888", "from": "raw_orders", "title": "08_stg_orders.sql", "to": "stg_orders"}, {"arrows": "to", "color": "#888888", "from": "raw_order_items", "title": "09_stg_order_items.sql", "to": "stg_order_items"}, {"arrows": "to", "color": "#888888", "from": "raw_products", "title": "10_stg_products.sql", "to": "stg_products"}, {"arrows": "to", "color": "#888888", "from": "raw_payments", "title": "11_stg_payments.sql", "to": "stg_payments"}, {"arrows": "to", "color": "#888888", "from": "stg_customers", "title": "12_dim_customers.sql", "to": "dim_customers"}, {"arrows": "to", "color": "#888888", "from": "stg_orders", "title": "12_dim_customers.sql", "to": "dim_customers"}, {"arrows": "to", "color": "#888888", "from": "stg_order_items", "title": "13_dim_products.sql", "to": "dim_products"}, {"arrows": "to", "color": "#888888", "from": "stg_products", "title": "13_dim_products.sql", "to": "dim_products"}, {"arrows": "to", "color": "#888888", "from": "stg_customers", "title": "14_fct_orders.sql", "to": "fct_orders"}, {"arrows": "to", "color": "#888888", "from": "stg_orders", "title": "14_fct_orders.sql", "to": "fct_orders"}, {"arrows": "to", "color": "#888888", "from": "stg_orders", "title": "15_fct_payments.sql", "to": "fct_payments"}, {"arrows": "to", "color": "#888888", "from": "stg_payments", "title": "15_fct_payments.sql", "to": "fct_payments"}, {"arrows": "to", "color": "#888888", "from": "stg_order_items", "title": "16_fct_order_items.sql", "to": "fct_order_items"}, {"arrows": "to", "color": "#888888", "from": "stg_orders", "title": "16_fct_order_items.sql", "to": "fct_order_items"}, {"arrows": "to", "color": "#888888", "from": "stg_products", "title": "16_fct_order_items.sql", "to": "fct_order_items"}, {"arrows": "to", "color": "#888888", "from": "dim_customers", "title": "17_mrt_customer_lifetime_value.sql", "to": "mrt_customer_lifetime_value"}, {"arrows": "to", "color": "#888888", "from": "fct_orders", "title": "17_mrt_customer_lifetime_value.sql", "to": "mrt_customer_lifetime_value"}, {"arrows": "to", "color": "#888888", "from": "fct_payments", "title": "17_mrt_customer_lifetime_value.sql", "to": "mrt_customer_lifetime_value"}, {"arrows": "to", "color": "#888888", "from": "dim_products", "title": "18_mrt_product_performance.sql", "to": "mrt_product_performance"}, {"arrows": "to", "color": "#888888", "from": "fct_order_items", "title": "18_mrt_product_performance.sql", "to": "mrt_product_performance"}, {"arrows": "to", "color": "#888888", "from": "fct_orders", "title": "19_mrt_daily_revenue.sql", "to": "mrt_daily_revenue"}, {"arrows": "to", "color": "#888888", "from": "fct_payments", "title": "19_mrt_daily_revenue.sql", "to": "mrt_daily_revenue"}, {"arrows": "to", "color": "#888888", "from": "dim_customers", "title": "20_mrt_marketing_attribution.sql", "to": "mrt_marketing_attribution"}, {"arrows": "to", "color": "#888888", "from": "mrt_customer_lifetime_value", "title": "20_mrt_marketing_attribution.sql", "to": "mrt_marketing_attribution"}, {"arrows": "to", "color": "#888888", "from": "raw_events", "title": "20_mrt_marketing_attribution.sql", "to": "mrt_marketing_attribution"}, {"arrows": "to", "color": "#888888", "from": "mrt_daily_revenue", "title": "21_rpt_executive_summary.sql", "to": "rpt_executive_summary"}, {"arrows": "to", "color": "#888888", "from": "mrt_customer_lifetime_value", "title": "21_rpt_executive_summary.sql", "to": "rpt_executive_summary"}, {"arrows": "to", "color": "#888888", "from": "mrt_product_performance", "title": "21_rpt_executive_summary.sql", "to": "rpt_executive_summary"}, {"arrows": "to", "color": "#888888", "from": "dim_customers", "title": "22_rpt_churn_risk.sql", "to": "rpt_churn_risk"}, {"arrows": "to", "color": "#888888", "from": "fct_orders", "title": "22_rpt_churn_risk.sql", "to": "rpt_churn_risk"}, {"arrows": "to", "color": "#888888", "from": "mrt_customer_lifetime_value", "title": "22_rpt_churn_risk.sql", "to": "rpt_churn_risk"}, {"arrows": "to", "color": "#888888", "from": "fct_payments", "title": "22_rpt_churn_risk.sql", "to": "rpt_churn_risk"}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": false
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "barnesHut": {
+            "avoidOverlap": 0,
+            "centralGravity": 0.3,
+            "damping": 0.09,
+            "gravitationalConstant": -5000,
+            "springConstant": 0.001,
+            "springLength": 200
+        },
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>

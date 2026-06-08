@@ -83,7 +83,14 @@ def impact(table_column, fmt):
         scripts  = " -> ".join(row["via_scripts"])
         click.echo(f"  [depth {depth}] {affected}")
         click.echo(f"           via: {scripts}\n")
-
+@cli.command()
+@click.option("--mode", type=click.Choice(["table", "column"]), default="table")
+@click.option("--output", default="lineage_graph.html")
+def visualize(mode, output):
+    """Export the lineage graph as an interactive HTML file"""
+    from lineage.analysis.visualizer import export_graph
+    export_graph(output_path=output, mode=mode)
+    click.echo(f"Saved to {output}")
 
 def _parse_arg(table_column: str):
     parts = table_column.split(".")

@@ -2,3 +2,8 @@ sqlglot
 neo4j
 python-dotenv
 click
+sqlglot
+neo4j
+python-dotenv
+click
+pyvis
