@@ -49,7 +49,7 @@ COMBINED_UI_HTML = """
     font-size: 13px;
     color: white;
     z-index: 99999;
-    pointer-events: all;
+    width: 220px;
 ">
   <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">Layer Legend</div>
   <div><span style="color:#e06c75;">&#9679;</span> raw_ &nbsp; source tables</div>
@@ -92,6 +92,38 @@ COMBINED_UI_HTML = """
   ">Clear</button>
 </div>
 
+<div id="detailPanel" style="
+    display: none;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: monospace;
+    font-size: 13px;
+    color: white;
+    z-index: 99999;
+    width: 260px;
+    line-height: 1.8;
+">
+  <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Node Detail</div>
+  <div id="detailContent"></div>
+  <button onclick="document.getElementById('detailPanel').style.display='none'" style="
+        margin-top: 10px;
+        background: #555;
+        border: none;
+        border-radius: 4px;
+        color: white;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 12px;
+        width: 100%;
+  ">Close</button>
+</div>
+
 <script type="text/javascript">
 function doSearch(val) {
     var query = val.toLowerCase().trim();
@@ -117,7 +149,7 @@ function clearSearch() {
     var updates = [];
     allNodes.forEach(function(node) {
         updates.push({
-            id:   node.id,
+            id:    node.id,
             color: node.color,
             font:  {color:"white", size:14},
             size:  node.size || 15
@@ -125,6 +157,46 @@ function clearSearch() {
     });
     network.body.data.nodes.update(updates);
 }
+
+network.on("click", function(params) {
+    if (params.nodes.length === 0) return;
+
+    var nodeId   = params.nodes[0];
+    var nodeData = network.body.data.nodes.get(nodeId);
+    var allEdges = network.body.data.edges.get();
+
+    var upstream   = 0;
+    var downstream = 0;
+    var scripts    = new Set();
+
+    allEdges.forEach(function(edge) {
+        if (edge.to === nodeId)   { upstream++;   if (edge.title) scripts.add(edge.title); }
+        if (edge.from === nodeId) { downstream++; if (edge.title) scripts.add(edge.title); }
+    });
+
+    var name  = nodeId;
+    var layer = "other";
+    if (name.startsWith("raw_"))             layer = "raw (source)";
+    else if (name.startsWith("stg_"))        layer = "stg (staging)";
+    else if (name.startsWith("dim_"))        layer = "dim (warehouse)";
+    else if (name.startsWith("fct_"))        layer = "fct (warehouse)";
+    else if (name.startsWith("mrt_"))        layer = "mrt (mart)";
+    else if (name.startsWith("rpt_"))        layer = "rpt (report)";
+
+    var scriptList = Array.from(scripts).map(function(s) {
+        return "<div style='color:#98c379; font-size:11px;'>" + s + "</div>";
+    }).join("");
+
+    document.getElementById("detailContent").innerHTML =
+        "<div><b>Name:</b> " + name + "</div>" +
+        "<div><b>Layer:</b> " + layer + "</div>" +
+        "<div><b>Upstream edges:</b> " + upstream + "</div>" +
+        "<div><b>Downstream edges:</b> " + downstream + "</div>" +
+        "<div style='margin-top:6px;'><b>SQL files:</b></div>" +
+        (scriptList || "<div style='color:#888;'>none</div>");
+
+    document.getElementById("detailPanel").style.display = "block";
+});
 </script>
 """
 
