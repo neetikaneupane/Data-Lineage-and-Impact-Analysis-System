@@ -93,6 +93,32 @@ def visualize(mode, output, focus):
     export_graph(output_path=output, mode=mode, focus=focus)
     click.echo(f"Saved to {output}")
 
+@cli.command()
+@click.option("--exclude", default="rpt_,mrt_", help="Comma-separated layer prefixes to exclude e.g. rpt_,mrt_")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+def dead(exclude, fmt):
+    """Find columns with no downstream usage (dead columns)"""
+    from lineage.analysis.traversal import dead_columns
+    exclude_layers = [e.strip() for e in exclude.split(",") if e.strip()]
+    rows = dead_columns(exclude_layers=exclude_layers)
+
+    if not rows:
+        click.echo("No dead columns found.")
+        return
+
+    if fmt == "json":
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    click.echo(f"\nDead columns ({len(rows)} found):\n")
+    current_table = None
+    for row in rows:
+        if row["table_name"] != current_table:
+            current_table = row["table_name"]
+            click.echo(f"  {current_table}")
+        click.echo(f"    - {row['column_name']}")
+    click.echo()
+
 def _parse_arg(table_column: str):
     parts = table_column.split(".")
     if len(parts) != 2:

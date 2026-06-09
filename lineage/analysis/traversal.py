@@ -59,3 +59,28 @@ def impact(table: str, column: str) -> list[dict]:
 
     client.close()
     return result
+
+def dead_columns(exclude_layers: list[str] = None) -> list[dict]:
+    client = Neo4jClient()
+
+    if exclude_layers is None:
+        exclude_layers = ["rpt_"]
+
+    result = client.run(
+        """
+        MATCH (c:Column)
+        WHERE NOT (c)-[:DERIVES_INTO]->()
+        RETURN c.table AS table_name, c.column AS column_name
+        ORDER BY c.table, c.column
+        """
+    )
+
+    client.close()
+
+    filtered = []
+    for row in result:
+        table = row["table_name"]
+        if not any(table.startswith(layer) for layer in exclude_layers):
+            filtered.append(row)
+
+    return filtered
