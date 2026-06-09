@@ -217,10 +217,12 @@ def _inject_ui(output_path: str):
     with open(output_path, "w") as f:
         f.write(html)
 
-def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
+def export_graph(output_path: str = "lineage_graph.html", mode: str = "table", focus: str = None):
     client = Neo4jClient()
 
-    if mode == "table":
+    if focus:
+        _export_focus_graph(client, output_path, focus)
+    elif mode == "table":
         _export_table_graph(client, output_path)
     elif mode == "column":
         _export_column_graph(client, output_path)
@@ -338,6 +340,93 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
     net.save_graph(output_path)
     _inject_ui(output_path)
 
+def _export_focus_graph(client: Neo4jClient, output_path: str, focus: str):
+    parts = focus.split(".")
+    if len(parts) != 2:
+        print("Focus must be table.column e.g. raw_customers.email")
+        return
+
+    table, column = parts
+    node_id = f"{table}.{column}"
+
+    net = Network(
+        height="900px",
+        width="100%",
+        directed=True,
+        bgcolor="#1e1e2e",
+        font_color="white"
+    )
+    net.barnes_hut(gravity=-8000, central_gravity=0.3, spring_length=180)
+
+    # get all upstream paths
+    upstream_rows = client.run(
+        """
+        MATCH path = (src:Column)-[:DERIVES_INTO*]->(tgt:Column {id: $id})
+        UNWIND relationships(path) AS r
+        RETURN startNode(r).id AS src, endNode(r).id AS tgt,
+               startNode(r).table AS src_table, endNode(r).table AS tgt_table,
+               r.sql_file AS file
+        """,
+        {"id": node_id}
+    )
+
+    # get all downstream paths
+    downstream_rows = client.run(
+        """
+        MATCH path = (src:Column {id: $id})-[:DERIVES_INTO*]->(tgt:Column)
+        UNWIND relationships(path) AS r
+        RETURN startNode(r).id AS src, endNode(r).id AS tgt,
+               startNode(r).table AS src_table, endNode(r).table AS tgt_table,
+               r.sql_file AS file
+        """,
+        {"id": node_id}
+    )
+
+    all_rows = upstream_rows + downstream_rows
+    nodes    = set()
+    edges    = set()
+
+    for row in all_rows:
+        src       = row["src"]
+        tgt       = row["tgt"]
+        src_table = row["src_table"]
+        tgt_table = row["tgt_table"]
+        file      = row["file"]
+
+        if src not in nodes:
+            is_focus = src == node_id
+            net.add_node(
+                src,
+                label=src,
+                title=src,
+                color="#ffffff" if is_focus else _node_color(src_table),
+                size=25 if is_focus else 15
+            )
+            nodes.add(src)
+
+        if tgt not in nodes:
+            is_focus = tgt == node_id
+            net.add_node(
+                tgt,
+                label=tgt,
+                title=tgt,
+                color="#ffffff" if is_focus else _node_color(tgt_table),
+                size=25 if is_focus else 15
+            )
+            nodes.add(tgt)
+
+        edge_key = (src, tgt)
+        if edge_key not in edges:
+            net.add_edge(src, tgt, title=file, color="#888888")
+            edges.add(edge_key)
+
+    if not nodes:
+        print(f"No lineage found for {focus}")
+        return
+
+    net.save_graph(output_path)
+    _inject_ui(output_path)
+    
 def _node_color(name: str) -> str:
     for prefix, color in LAYER_COLORS.items():
         if name.startswith(prefix):

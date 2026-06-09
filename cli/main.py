@@ -86,10 +86,11 @@ def impact(table_column, fmt):
 @cli.command()
 @click.option("--mode", type=click.Choice(["table", "column"]), default="table")
 @click.option("--output", default="lineage_graph.html")
-def visualize(mode, output):
+@click.option("--focus", default=None, help="Focus on subgraph for table.column e.g. raw_customers.email")
+def visualize(mode, output, focus):
     """Export the lineage graph as an interactive HTML file"""
     from lineage.analysis.visualizer import export_graph
-    export_graph(output_path=output, mode=mode)
+    export_graph(output_path=output, mode=mode, focus=focus)
     click.echo(f"Saved to {output}")
 
 def _parse_arg(table_column: str):
