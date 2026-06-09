@@ -36,11 +36,11 @@ LEGEND_HTML = """
 </div>
 """
 
-SEARCH_HTML = """
+COMBINED_UI_HTML = """
 <div style="
     position: fixed;
     top: 20px;
-    right: 20px;
+    left: 20px;
     background: #2a2a3e;
     border: 1px solid #444;
     border-radius: 8px;
@@ -48,15 +48,22 @@ SEARCH_HTML = """
     font-family: monospace;
     font-size: 13px;
     color: white;
-    z-index: 9999;
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    z-index: 99999;
+    pointer-events: all;
 ">
+  <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">Layer Legend</div>
+  <div><span style="color:#e06c75;">&#9679;</span> raw_ &nbsp; source tables</div>
+  <div><span style="color:#e5c07b;">&#9679;</span> stg_ &nbsp; staging</div>
+  <div><span style="color:#61afef;">&#9679;</span> dim_ / fct_ &nbsp; warehouse</div>
+  <div><span style="color:#98c379;">&#9679;</span> mrt_ &nbsp; marts</div>
+  <div><span style="color:#c678dd;">&#9679;</span> rpt_ &nbsp; reports</div>
+  <div><span style="color:#abb2bf;">&#9679;</span> other</div>
+  <hr style="border-color:#444; margin: 10px 0;">
+  <div style="margin-bottom: 6px; font-weight: bold;">Search</div>
   <input
     id="searchBox"
     type="text"
-    placeholder="Search node..."
+    placeholder="e.g. raw_customers"
     style="
         background: #1e1e2e;
         border: 1px solid #555;
@@ -64,54 +71,56 @@ SEARCH_HTML = """
         color: white;
         padding: 6px 10px;
         font-family: monospace;
-        font-size: 13px;
-        width: 220px;
+        font-size: 12px;
+        width: 180px;
         outline: none;
+        display: block;
+        margin-bottom: 6px;
     "
+    oninput="doSearch(this.value)"
   />
   <button onclick="clearSearch()" style="
-        background: #444;
+        background: #555;
         border: none;
         border-radius: 4px;
         color: white;
-        padding: 6px 10px;
+        padding: 5px 10px;
         cursor: pointer;
         font-family: monospace;
+        font-size: 12px;
+        width: 100%;
   ">Clear</button>
 </div>
 
-<script>
-document.getElementById("searchBox").addEventListener("input", function() {
-    const query = this.value.toLowerCase().trim();
+<script type="text/javascript">
+function doSearch(val) {
+    var query = val.toLowerCase().trim();
     if (!query) { clearSearch(); return; }
-
-    const allNodes = network.body.data.nodes.get();
-    const updates  = [];
-
+    var allNodes = network.body.data.nodes.get();
+    var updates = [];
     allNodes.forEach(function(node) {
-        const label = (node.title || node.id || "").toLowerCase();
-        const match = label.includes(query);
+        var label = (node.title || node.id || "").toLowerCase();
+        var match = label.indexOf(query) !== -1;
         updates.push({
-            id:      node.id,
-            color:   match ? { background: "#ffffff", border: "#ffffff" } : { background: "#333344", border: "#333344" },
-            font:    match ? { color: "#000000", size: 16 } : { color: "#333344" },
-            size:    match ? 25 : 8
+            id:    node.id,
+            color: match ? {background:"#ffffff",border:"#ffffff"} : {background:"#2a2a3e",border:"#2a2a3e"},
+            font:  match ? {color:"#000000",size:16} : {color:"#2a2a3e",size:10},
+            size:  match ? 28 : 6
         });
     });
-
     network.body.data.nodes.update(updates);
-});
+}
 
 function clearSearch() {
     document.getElementById("searchBox").value = "";
-    const allNodes = network.body.data.nodes.get();
-    const updates  = [];
+    var allNodes = network.body.data.nodes.get();
+    var updates = [];
     allNodes.forEach(function(node) {
         updates.push({
-            id:    node.id,
-            color: node._originalColor || node.color,
-            font:  { color: "white", size: 14 },
-            size:  node._originalSize  || 15
+            id:   node.id,
+            color: node.color,
+            font:  {color:"white", size:14},
+            size:  node.size || 15
         });
     });
     network.body.data.nodes.update(updates);
@@ -119,6 +128,22 @@ function clearSearch() {
 </script>
 """
 
+
+def _inject_ui(output_path: str):
+    with open(output_path, "r") as f:
+        html = f.read()
+
+    # fix mynetwork stacking context so our UI panel renders on top
+    html = html.replace(
+        "position: relative;",
+        "position: relative; z-index: 0;",
+        1
+    )
+
+    html = html.replace("</body>", f"{COMBINED_UI_HTML}</body>", 1)
+
+    with open(output_path, "w") as f:
+        f.write(html)
 
 def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
     client = Neo4jClient()
@@ -132,20 +157,6 @@ def export_graph(output_path: str = "lineage_graph.html", mode: str = "table"):
     print(f"Graph exported to {output_path}")
 
 
-def _inject_legend(output_path: str):
-    with open(output_path, "r") as f:
-        html = f.read()
-    html = html.replace("<body>", f"<body>{LEGEND_HTML}", 1)
-    with open(output_path, "w") as f:
-        f.write(html)
-
-
-def _inject_search(output_path: str):
-    with open(output_path, "r") as f:
-        html = f.read()
-    html = html.replace("<body>", f"<body>{SEARCH_HTML}", 1)
-    with open(output_path, "w") as f:
-        f.write(html)
 
 
 def _export_table_graph(client: Neo4jClient, output_path: str):
@@ -181,8 +192,7 @@ def _export_table_graph(client: Neo4jClient, output_path: str):
         net.add_edge(src, tgt, title=file, color="#888888")
 
     net.save_graph(output_path)
-    _inject_legend(output_path)
-    _inject_search(output_path)
+    _inject_ui(output_path)
 
 
 def _export_column_graph(client: Neo4jClient, output_path: str):
@@ -239,8 +249,7 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
         net.add_edge(src, tgt, title=file, color="#444444")
 
     net.save_graph(output_path)
-    _inject_legend(output_path)
-    _inject_search(output_path)
+    _inject_ui(output_path)
 
 
 def _node_color(name: str) -> str:

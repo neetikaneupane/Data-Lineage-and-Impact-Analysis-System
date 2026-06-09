@@ -36,7 +36,7 @@
                  height: 900px;
                  background-color: #1e1e2e;
                  border: 1px solid lightgray;
-                 position: relative;
+                 position: relative; z-index: 0;
                  float: left;
              }
 
@@ -50,28 +50,6 @@
 
 
     <body>
-<div style="
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    background: #2a2a3e;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 14px 18px;
-    font-family: monospace;
-    font-size: 13px;
-    color: white;
-    z-index: 9999;
-">
-  <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">Layer Legend</div>
-  <div><span style="color:#e06c75;">&#9679;</span> raw_   &nbsp; source tables</div>
-  <div><span style="color:#e5c07b;">&#9679;</span> stg_   &nbsp; staging</div>
-  <div><span style="color:#61afef;">&#9679;</span> dim_ / fct_  &nbsp; warehouse</div>
-  <div><span style="color:#98c379;">&#9679;</span> mrt_   &nbsp; marts</div>
-  <div><span style="color:#c678dd;">&#9679;</span> rpt_   &nbsp; reports</div>
-  <div><span style="color:#abb2bf;">&#9679;</span> other</div>
-</div>
-
         <div class="card" style="width: 100%">
             
             
@@ -181,5 +159,95 @@
               }
               drawGraph();
         </script>
-    </body>
+    
+<div style="
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: monospace;
+    font-size: 13px;
+    color: white;
+    z-index: 99999;
+    pointer-events: all;
+">
+  <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px;">Layer Legend</div>
+  <div><span style="color:#e06c75;">&#9679;</span> raw_ &nbsp; source tables</div>
+  <div><span style="color:#e5c07b;">&#9679;</span> stg_ &nbsp; staging</div>
+  <div><span style="color:#61afef;">&#9679;</span> dim_ / fct_ &nbsp; warehouse</div>
+  <div><span style="color:#98c379;">&#9679;</span> mrt_ &nbsp; marts</div>
+  <div><span style="color:#c678dd;">&#9679;</span> rpt_ &nbsp; reports</div>
+  <div><span style="color:#abb2bf;">&#9679;</span> other</div>
+  <hr style="border-color:#444; margin: 10px 0;">
+  <div style="margin-bottom: 6px; font-weight: bold;">Search</div>
+  <input
+    id="searchBox"
+    type="text"
+    placeholder="e.g. raw_customers"
+    style="
+        background: #1e1e2e;
+        border: 1px solid #555;
+        border-radius: 4px;
+        color: white;
+        padding: 6px 10px;
+        font-family: monospace;
+        font-size: 12px;
+        width: 180px;
+        outline: none;
+        display: block;
+        margin-bottom: 6px;
+    "
+    oninput="doSearch(this.value)"
+  />
+  <button onclick="clearSearch()" style="
+        background: #555;
+        border: none;
+        border-radius: 4px;
+        color: white;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 12px;
+        width: 100%;
+  ">Clear</button>
+</div>
+
+<script type="text/javascript">
+function doSearch(val) {
+    var query = val.toLowerCase().trim();
+    if (!query) { clearSearch(); return; }
+    var allNodes = network.body.data.nodes.get();
+    var updates = [];
+    allNodes.forEach(function(node) {
+        var label = (node.title || node.id || "").toLowerCase();
+        var match = label.indexOf(query) !== -1;
+        updates.push({
+            id:    node.id,
+            color: match ? {background:"#ffffff",border:"#ffffff"} : {background:"#2a2a3e",border:"#2a2a3e"},
+            font:  match ? {color:"#000000",size:16} : {color:"#2a2a3e",size:10},
+            size:  match ? 28 : 6
+        });
+    });
+    network.body.data.nodes.update(updates);
+}
+
+function clearSearch() {
+    document.getElementById("searchBox").value = "";
+    var allNodes = network.body.data.nodes.get();
+    var updates = [];
+    allNodes.forEach(function(node) {
+        updates.push({
+            id:   node.id,
+            color: node.color,
+            font:  {color:"white", size:14},
+            size:  node.size || 15
+        });
+    });
+    network.body.data.nodes.update(updates);
+}
+</script>
+</body>
 </html>
