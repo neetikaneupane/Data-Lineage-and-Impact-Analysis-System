@@ -95,8 +95,9 @@ def visualize(mode, output, focus):
 
 @cli.command()
 @click.option("--exclude", default="rpt_,mrt_", help="Comma-separated layer prefixes to exclude e.g. rpt_,mrt_")
+@click.option("--layer", default=None, help="Only show dead columns in this layer e.g. fct")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
-def dead(exclude, fmt):
+def dead(exclude, layer, fmt):
     """Find columns with no downstream usage (dead columns)"""
     from lineage.analysis.traversal import dead_columns
     exclude_layers = [e.strip() for e in exclude.split(",") if e.strip()]
@@ -110,21 +111,26 @@ def dead(exclude, fmt):
     summary = data["summary"]
     total   = data["total"]
 
+    if layer:
+        rows = [r for r in rows if r["table"].startswith(layer + "_") or r["table"].startswith(layer)]
+
     if not rows:
         click.echo("No dead columns found.")
         return
 
-    click.echo(f"\nDead columns ({total} found):\n")
+    click.echo(f"\nDead columns ({len(rows)} found):\n")
     current_table = None
     for row in rows:
         if row["table"] != current_table:
             current_table = row["table"]
             click.echo(f"  {current_table}")
-        click.echo(f"    - {row['column']}")
+        scripts = row["source_files"]
+        last    = scripts[-1] if scripts else "unknown"
+        click.echo(f"    - {row['column']:<30} last touched by: {last}")
 
     click.echo(f"\nSummary by layer:")
-    for layer, count in sorted(summary.items()):
-        click.echo(f"  {layer:<6} {count} dead column(s)")
+    for lyr, count in sorted(summary.items()):
+        click.echo(f"  {lyr:<6} {count} dead column(s)")
     click.echo()
 
 def _parse_arg(table_column: str):
