@@ -100,23 +100,31 @@ def dead(exclude, fmt):
     """Find columns with no downstream usage (dead columns)"""
     from lineage.analysis.traversal import dead_columns
     exclude_layers = [e.strip() for e in exclude.split(",") if e.strip()]
-    rows = dead_columns(exclude_layers=exclude_layers)
+    data = dead_columns(exclude_layers=exclude_layers)
+
+    if fmt == "json":
+        click.echo(json.dumps(data, indent=2))
+        return
+
+    rows    = data["columns"]
+    summary = data["summary"]
+    total   = data["total"]
 
     if not rows:
         click.echo("No dead columns found.")
         return
 
-    if fmt == "json":
-        click.echo(json.dumps(rows, indent=2))
-        return
-
-    click.echo(f"\nDead columns ({len(rows)} found):\n")
+    click.echo(f"\nDead columns ({total} found):\n")
     current_table = None
     for row in rows:
-        if row["table_name"] != current_table:
-            current_table = row["table_name"]
+        if row["table"] != current_table:
+            current_table = row["table"]
             click.echo(f"  {current_table}")
-        click.echo(f"    - {row['column_name']}")
+        click.echo(f"    - {row['column']}")
+
+    click.echo(f"\nSummary by layer:")
+    for layer, count in sorted(summary.items()):
+        click.echo(f"  {layer:<6} {count} dead column(s)")
     click.echo()
 
 def _parse_arg(table_column: str):
