@@ -275,29 +275,42 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
         bgcolor="#1e1e2e",
         font_color="white"
     )
-    net.barnes_hut(
-        gravity=-12000,
-        central_gravity=0.1,
-        spring_length=250,
-        spring_strength=0.01,
-        damping=0.09
-    )
+    net.set_options("""
+    {
+        "physics": {
+            "barnesHut": {
+                "gravitationalConstant": -12000,
+                "centralGravity": 0.1,
+                "springLength": 120,
+                "springConstant": 0.08,
+                "damping": 0.09
+            }
+        },
+        "edges": {
+            "smooth": {
+                "type": "curvedCW",
+                "roundness": 0.2
+            }
+        }
+    }
+    """)
 
     rows = client.run(
         """
         MATCH (src:Column)-[r:DERIVES_INTO]->(tgt:Column)
-        RETURN src.id AS src, tgt.id AS tgt, r.sql_file AS file
+        RETURN src.id AS src, src.table AS src_table,
+               tgt.id AS tgt, tgt.table AS tgt_table,
+               r.sql_file AS file
         """
     )
 
     nodes = set()
     for row in rows:
-        src  = row["src"]
-        tgt  = row["tgt"]
-        file = row["file"]
-
-        src_table = src.split(".")[0]
-        tgt_table = tgt.split(".")[0]
+        src       = row["src"]
+        tgt       = row["tgt"]
+        src_table = row["src_table"]
+        tgt_table = row["tgt_table"]
+        file      = row["file"]
 
         if src not in nodes:
             net.add_node(
@@ -305,7 +318,8 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
                 label="",
                 title=src,
                 color=_node_color(src_table),
-                size=10
+                size=10,
+                group=src_table
             )
             nodes.add(src)
         if tgt not in nodes:
@@ -314,7 +328,8 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
                 label="",
                 title=tgt,
                 color=_node_color(tgt_table),
-                size=10
+                size=10,
+                group=tgt_table
             )
             nodes.add(tgt)
 
@@ -322,7 +337,6 @@ def _export_column_graph(client: Neo4jClient, output_path: str):
 
     net.save_graph(output_path)
     _inject_ui(output_path)
-
 
 def _node_color(name: str) -> str:
     for prefix, color in LAYER_COLORS.items():
