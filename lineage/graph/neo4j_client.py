@@ -32,3 +32,13 @@ class Neo4jClient:
         for idx in indexes:
             self.run(idx)
         print("Indexes created.")
+
+def create_constraints(self):
+    constraints = [
+        "CREATE CONSTRAINT column_id_unique IF NOT EXISTS FOR (c:Column) REQUIRE c.id IS UNIQUE",
+        "CREATE CONSTRAINT table_name_unique IF NOT EXISTS FOR (t:Table) REQUIRE t.name IS UNIQUE",
+        "CREATE CONSTRAINT file_path_unique IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE",
+    ]
+    for constraint in constraints:
+        self.run(constraint)
+    print("Constraints created.")
