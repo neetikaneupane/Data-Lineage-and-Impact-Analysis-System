@@ -157,6 +157,85 @@ def orphans(fmt):
         click.echo(f"    - {row['column']}")
     click.echo()
 
+@cli.command()
+@click.argument("table_column")
+@click.argument("new_name")
+@click.option("--output", default=None, help="Write checklist to a .md file")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+def simulate_rename(table_column, new_name, output, fmt):
+    """Simulate renaming TABLE.COLUMN to NEW_NAME and show migration checklist"""
+    from lineage.analysis.simulator import simulate_rename as _rename
+    from lineage.analysis.simulator import export_markdown
+    table, column = _parse_arg(table_column)
+    result = _rename(table, column, new_name)
+
+    if fmt == "json":
+        click.echo(json.dumps(result, indent=2))
+        if output:
+            export_markdown(result, output)
+        return
+
+    if not result["steps"]:
+        click.echo(f"No downstream impact found for {table_column}")
+        return
+
+    click.echo(f"\nRename simulation: {table_column} → {new_name}\n")
+    click.echo(f"  {result['total']} downstream columns affected\n")
+
+    current_depth = None
+    for step in result["steps"]:
+        if step["depth"] != current_depth:
+            current_depth = step["depth"]
+            click.echo(f"\n  [depth {current_depth}]")
+        click.echo(f"    {step['affected_table']}.{step['affected_column']}")
+        click.echo(f"      action : {step['action']}")
+
+    click.echo()
+
+    if output:
+        export_markdown(result, output)
+
+
+@cli.command()
+@click.argument("table_column")
+@click.argument("old_type")
+@click.argument("new_type")
+@click.option("--output", default=None, help="Write checklist to a .md file")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+def simulate_type(table_column, old_type, new_type, output, fmt):
+    """Simulate a type change on TABLE.COLUMN and show migration checklist"""
+    from lineage.analysis.simulator import simulate_type_change
+    from lineage.analysis.simulator import export_markdown
+    table, column = _parse_arg(table_column)
+    result = simulate_type_change(table, column, old_type, new_type)
+
+    if fmt == "json":
+        click.echo(json.dumps(result, indent=2))
+        if output:
+            export_markdown(result, output)
+        return
+
+    if not result["steps"]:
+        click.echo(f"No downstream impact found for {table_column}")
+        return
+
+    click.echo(f"\nType change simulation: {table_column} {old_type} → {new_type}")
+    click.echo(f"  Risk: {result['risk_note']}")
+    click.echo(f"  {result['total']} downstream columns affected\n")
+
+    current_depth = None
+    for step in result["steps"]:
+        if step["depth"] != current_depth:
+            current_depth = step["depth"]
+            click.echo(f"\n  [depth {current_depth}]")
+        click.echo(f"    {step['affected_table']}.{step['affected_column']}")
+        click.echo(f"      action : {step['action']}")
+
+    click.echo()
+
+    if output:
+        export_markdown(result, output)
+
 def _parse_arg(table_column: str):
     parts = table_column.split(".")
     if len(parts) != 2:
