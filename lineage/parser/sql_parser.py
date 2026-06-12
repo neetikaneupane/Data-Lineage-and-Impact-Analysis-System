@@ -3,17 +3,26 @@ import sqlglot
 import sqlglot.expressions as exp
 
 
-def parse_sql_file(filepath: str) -> dict:
-    with open(filepath, "r") as f:
-        sql = f.read()
-
+def parse_sql_file(filepath: str) -> dict | None:
     filename = os.path.basename(filepath)
-    statements = sqlglot.parse(sql, dialect="postgres")
+
+    try:
+        with open(filepath, "r") as f:
+            sql = f.read()
+    except OSError as e:
+        print(f"  [WARN] Could not read {filename}: {e}")
+        return None
+
+    try:
+        statements = sqlglot.parse(sql, dialect="postgres")
+    except Exception as e:
+        print(f"  [WARN] Could not parse {filename}: {e}")
+        return None
 
     result = {
-        "file": filename,
-        "output_table": None,
-        "input_tables": [],
+        "file":          filename,
+        "output_table":  None,
+        "input_tables":  [],
         "column_mappings": []
     }
 
@@ -21,19 +30,21 @@ def parse_sql_file(filepath: str) -> dict:
         if not statement:
             continue
 
-        # extract output table
-        if isinstance(statement, (exp.Create, exp.Insert)):
-            output = _extract_output_table(statement)
-            if output:
-                result["output_table"] = output
+        try:
+            if isinstance(statement, (exp.Create, exp.Insert)):
+                output = _extract_output_table(statement)
+                if output:
+                    result["output_table"] = output
 
-        # extract input tables
-        input_tables = _extract_input_tables(statement)
-        result["input_tables"] = list(set(input_tables))
+            input_tables = _extract_input_tables(statement)
+            result["input_tables"] = list(set(input_tables))
 
-        # extract column mappings
-        mappings = _extract_column_mappings(statement)
-        result["column_mappings"] = mappings
+            mappings = _extract_column_mappings(statement)
+            result["column_mappings"] = mappings
+
+        except Exception as e:
+            print(f"  [WARN] Error processing statement in {filename}: {e}")
+            continue
 
     return result
 
@@ -53,7 +64,6 @@ def _extract_output_table(statement) -> str | None:
 def _extract_input_tables(statement) -> list[str]:
     tables = []
 
-    # collect all CTEs so we can exclude them from input tables
     cte_names = set()
     for cte in statement.find_all(exp.CTE):
         if cte.alias:
@@ -76,18 +86,17 @@ def _extract_input_tables(statement) -> list[str]:
 def _extract_column_mappings(statement) -> list[dict]:
     mappings = []
 
-    # find the SELECT inside CREATE TABLE AS SELECT or INSERT INTO SELECT
     select = statement.find(exp.Select)
     if not select:
         return mappings
 
     for expr in select.expressions:
-        target_col = _get_alias_or_name(expr)
+        target_col  = _get_alias_or_name(expr)
         source_cols = _get_source_columns(expr)
 
         if target_col:
             mappings.append({
-                "target_column": target_col,
+                "target_column":  target_col,
                 "source_columns": source_cols
             })
 
@@ -113,7 +122,10 @@ def parse_all_sql_files(folder: str) -> list[dict]:
     results = []
     for fname in sorted(os.listdir(folder)):
         if fname.endswith(".sql"):
-            fpath = os.path.join(folder, fname)
+            fpath  = os.path.join(folder, fname)
             parsed = parse_sql_file(fpath)
-            results.append(parsed)
+            if parsed is not None:
+                results.append(parsed)
+            else:
+                print(f"  [SKIP] {fname} skipped due to parse error")
     return results
