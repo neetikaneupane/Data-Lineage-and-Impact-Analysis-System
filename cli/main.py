@@ -179,17 +179,28 @@ def simulate_rename(table_column, new_name, output, fmt):
         click.echo(f"No downstream impact found for {table_column}")
         return
 
-    click.echo(f"\nRename simulation: {table_column} → {new_name}\n")
-    click.echo(f"  {result['total']} downstream columns affected\n")
+    click.echo(f"\nRename simulation: {table_column} → {new_name}")
+    click.echo(f"  {result['total']} downstream columns affected")
+    click.echo(f"  {len(result['exec_order'])} scripts to update\n")
 
+    click.echo("Impact by layer:")
+    for layer, counts in sorted(result["layer_summary"].items()):
+        click.echo(f"  {layer:<6} {counts['columns']} column(s), {counts['scripts']} script(s)")
+
+    click.echo("\nSafe execution order:")
+    for i, script in enumerate(result["exec_order"], 1):
+        click.echo(f"  {i}. {script}")
+
+    click.echo("\nSteps:\n")
     current_depth = None
     for step in result["steps"]:
         if step["depth"] != current_depth:
             current_depth = step["depth"]
-            click.echo(f"\n  [depth {current_depth}]")
-        click.echo(f"    {step['affected_table']}.{step['affected_column']}")
-        click.echo(f"      action : {step['action']}")
-
+            click.echo(f"  [depth {current_depth}]")
+        indirect = " <- indirect break" if step.get("indirect_break") else ""
+        click.echo(f"    {step['affected_table']}.{step['affected_column']} [{step['severity']}]{indirect}")
+        click.echo(f"      action  : {step['action']}")
+        click.echo(f"      rollback: {step['rollback_action']}")
     click.echo()
 
     if output:
@@ -220,17 +231,27 @@ def simulate_type(table_column, old_type, new_type, output, fmt):
         return
 
     click.echo(f"\nType change simulation: {table_column} {old_type} → {new_type}")
-    click.echo(f"  Risk: {result['risk_note']}")
-    click.echo(f"  {result['total']} downstream columns affected\n")
+    click.echo(f"  Risk: {result['risk_level']} — {result['risk_note']}")
+    click.echo(f"  {result['total']} downstream columns affected")
+    click.echo(f"  {len(result['exec_order'])} scripts to update\n")
 
+    click.echo("Impact by layer:")
+    for layer, counts in sorted(result["layer_summary"].items()):
+        click.echo(f"  {layer:<6} {counts['columns']} column(s), {counts['scripts']} script(s)")
+
+    click.echo("\nSafe execution order:")
+    for i, script in enumerate(result["exec_order"], 1):
+        click.echo(f"  {i}. {script}")
+
+    click.echo("\nSteps:\n")
     current_depth = None
     for step in result["steps"]:
         if step["depth"] != current_depth:
             current_depth = step["depth"]
-            click.echo(f"\n  [depth {current_depth}]")
-        click.echo(f"    {step['affected_table']}.{step['affected_column']}")
-        click.echo(f"      action : {step['action']}")
-
+            click.echo(f"  [depth {current_depth}]")
+        click.echo(f"    {step['affected_table']}.{step['affected_column']} [{step['severity']}]")
+        click.echo(f"      action  : {step['action']}")
+        click.echo(f"      rollback: {step['rollback_action']}")
     click.echo()
 
     if output:
