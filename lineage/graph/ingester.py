@@ -7,6 +7,32 @@ def ingest_all(parsed_files: list[dict]):
     print("Clearing existing graph...")
     client.clear_all()
 
+    # first pass — create all table nodes
+    for pf in parsed_files:
+        if pf["output_table"]:
+            client.run(
+                "MERGE (t:Table {name: $name})",
+                {"name": pf["output_table"]}
+            )
+        for input_table in pf["input_tables"]:
+            client.run(
+                "MERGE (t:Table {name: $name})",
+                {"name": input_table}
+            )
+
+    # second pass — build column-to-table membership map
+    # so we know which columns actually belong to which table
+    table_columns: dict[str, set] = {}
+    for pf in parsed_files:
+        output_table = pf["output_table"]
+        if not output_table:
+            continue
+        if output_table not in table_columns:
+            table_columns[output_table] = set()
+        for mapping in pf["column_mappings"]:
+            table_columns[output_table].add(mapping["target_column"])
+
+    # third pass — create edges
     for pf in parsed_files:
         sql_file     = pf["file"]
         output_table = pf["output_table"]
@@ -16,18 +42,8 @@ def ingest_all(parsed_files: list[dict]):
         if not output_table:
             continue
 
-        # create output table node
-        client.run(
-            "MERGE (t:Table {name: $name})",
-            {"name": output_table}
-        )
-
-        # create table-level edges from each input table
+        # table-level edges
         for input_table in input_tables:
-            client.run(
-                "MERGE (t:Table {name: $name})",
-                {"name": input_table}
-            )
             client.run(
                 """
                 MATCH (src:Table {name: $src})
@@ -37,9 +53,10 @@ def ingest_all(parsed_files: list[dict]):
                 {"src": input_table, "tgt": output_table, "file": sql_file}
             )
 
-        # create column nodes and column-level edges
+        # column-level edges — only connect source column to input table
+        # if that table actually owns that column
         for mapping in mappings:
-            target_col = mapping["target_column"]
+            target_col  = mapping["target_column"]
             source_cols = mapping["source_columns"]
 
             target_node = f"{output_table}.{target_col}"
@@ -49,7 +66,18 @@ def ingest_all(parsed_files: list[dict]):
             )
 
             for sc in source_cols:
-                for input_table in input_tables:
+                # only connect to input tables that actually have this column
+                valid_sources = [
+                    t for t in input_tables
+                    if sc in table_columns.get(t, set())
+                ]
+
+                # if no valid source found fall back to all input tables
+                # this handles raw_ tables which have no prior mappings
+                if not valid_sources:
+                    valid_sources = input_tables
+
+                for input_table in valid_sources:
                     source_node = f"{input_table}.{sc}"
                     client.run(
                         "MERGE (c:Column {id: $id, table: $table, column: $col})",
