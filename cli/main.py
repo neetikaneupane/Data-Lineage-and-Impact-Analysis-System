@@ -133,6 +133,30 @@ def dead(exclude, layer, fmt):
         click.echo(f"  {lyr:<6} {count} dead column(s)")
     click.echo()
 
+@cli.command()
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+def orphans(fmt):
+    """Find columns with no upstream and no downstream connections"""
+    from lineage.analysis.traversal import orphan_columns
+    rows = orphan_columns()
+
+    if fmt == "json":
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    if not rows:
+        click.echo("No orphan columns found.")
+        return
+
+    click.echo(f"\nOrphan columns ({len(rows)} found):\n")
+    current_table = None
+    for row in rows:
+        if row["table"] != current_table:
+            current_table = row["table"]
+            click.echo(f"  {current_table}")
+        click.echo(f"    - {row['column']}")
+    click.echo()
+
 def _parse_arg(table_column: str):
     parts = table_column.split(".")
     if len(parts) != 2:

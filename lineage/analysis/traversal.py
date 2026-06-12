@@ -136,3 +136,20 @@ def _classify_dead_column(table: str, column: str, source_files: list, depth: in
             return "renamed"
 
     return "never_forwarded"
+
+def orphan_columns() -> list[dict]:
+    client = Neo4jClient()
+
+    result = client.run(
+        """
+        MATCH (c:Column)
+        WHERE NOT (c)-[:DERIVES_INTO]->()
+          AND NOT ()-[:DERIVES_INTO]->(c)
+        RETURN c.table AS table_name,
+               c.column AS column_name
+        ORDER BY c.table, c.column
+        """
+    )
+
+    client.close()
+    return [{"table": r["table_name"], "column": r["column_name"]} for r in result]
