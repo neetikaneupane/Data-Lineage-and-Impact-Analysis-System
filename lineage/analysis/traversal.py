@@ -81,18 +81,30 @@ def dead_columns(exclude_layers: list[str] = None) -> dict:
         """
     )
 
+    # collect all column names that exist anywhere downstream
+    all_cols = client.run("MATCH (c:Column) RETURN c.column AS column_name")
+    all_downstream_columns = set(r["column_name"] for r in all_cols)
+
     client.close()
 
     filtered = []
     for row in result:
         table = row["table_name"]
-        if not any(table.startswith(layer) for layer in exclude_layers):
-            filtered.append({
-                "table":        table,
-                "column":       row["column_name"],
-                "source_files": [f for f in row["source_files"] if f],
-                "depth":        row["depth"]
-            })
+        if any(table.startswith(layer) for layer in exclude_layers):
+            continue
+
+        source_files = [f for f in row["source_files"] if f]
+        depth        = row["depth"]
+        column       = row["column_name"]
+        reason       = _classify_dead_column(table, column, source_files, depth, all_downstream_columns)
+
+        filtered.append({
+            "table":        table,
+            "column":       column,
+            "source_files": source_files,
+            "depth":        depth,
+            "reason":       reason
+        })
 
     summary = {}
     for row in filtered:
@@ -113,3 +125,14 @@ def _get_layer(table_name: str) -> str:
         if table_name.startswith(prefix):
             return prefix.rstrip("_")
     return "other"
+
+def _classify_dead_column(table: str, column: str, source_files: list, depth: int, all_downstream_columns: set) -> str:
+    if not source_files and depth == 0:
+        return "orphan"
+
+    # check if a renamed version exists downstream
+    for downstream_col in all_downstream_columns:
+        if column in downstream_col and downstream_col != column:
+            return "renamed"
+
+    return "never_forwarded"

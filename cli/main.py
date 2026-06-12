@@ -126,8 +126,8 @@ def dead(exclude, layer, fmt):
             click.echo(f"  {current_table}")
         scripts = row["source_files"]
         last    = scripts[-1] if scripts else "unknown"
-        click.echo(f"    - {row['column']:<30} depth: {row['depth']}  last touched by: {last}")
-
+        reason  = row.get("reason", "")
+        click.echo(f"    - {row['column']:<30} depth: {row['depth']}  reason: {reason:<18}  last touched by: {last}")
     click.echo(f"\nSummary by layer:")
     for lyr, count in sorted(summary.items()):
         click.echo(f"  {lyr:<6} {count} dead column(s)")
