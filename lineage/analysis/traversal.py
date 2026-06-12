@@ -70,11 +70,14 @@ def dead_columns(exclude_layers: list[str] = None) -> dict:
         """
         MATCH (c:Column)
         WHERE NOT (c)-[:DERIVES_INTO]->()
+        OPTIONAL MATCH path = (root:Column)-[:DERIVES_INTO*]->(c)
+        WHERE NOT ()-[:DERIVES_INTO]->(root)
         OPTIONAL MATCH (src)-[r:DERIVES_INTO]->(c)
         RETURN c.table AS table_name,
                c.column AS column_name,
-               collect(r.sql_file) AS source_files
-        ORDER BY c.table, c.column
+               collect(DISTINCT r.sql_file) AS source_files,
+               COALESCE(MAX(length(path)), 0) AS depth
+        ORDER BY depth ASC, c.table, c.column
         """
     )
 
@@ -87,14 +90,13 @@ def dead_columns(exclude_layers: list[str] = None) -> dict:
             filtered.append({
                 "table":        table,
                 "column":       row["column_name"],
-                "source_files": [f for f in row["source_files"] if f]
+                "source_files": [f for f in row["source_files"] if f],
+                "depth":        row["depth"]
             })
 
-    # build cross-layer summary
     summary = {}
     for row in filtered:
-        table = row["table"]
-        layer = _get_layer(table)
+        layer = _get_layer(row["table"])
         if layer not in summary:
             summary[layer] = 0
         summary[layer] += 1

@@ -126,7 +126,7 @@ def dead(exclude, layer, fmt):
             click.echo(f"  {current_table}")
         scripts = row["source_files"]
         last    = scripts[-1] if scripts else "unknown"
-        click.echo(f"    - {row['column']:<30} last touched by: {last}")
+        click.echo(f"    - {row['column']:<30} depth: {row['depth']}  last touched by: {last}")
 
     click.echo(f"\nSummary by layer:")
     for lyr, count in sorted(summary.items()):
