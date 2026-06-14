@@ -4,12 +4,19 @@ from lineage.graph.neo4j_client import Neo4jClient
 
 
 @pytest.fixture(autouse=True)
-def clean_graph():
-    """Clear the graph before each test and restore full data after."""
+def clean_graph(load_full_graph):
+    """Clear and restore graph around each ingester test."""
     client = Neo4jClient()
     client.clear_all()
     yield
-    client.clear_all()
+    # restore full graph after each ingester test
+    from lineage.parser.sql_parser import parse_all_sql_files
+    from lineage.parser.python_parser import parse_all_python_files
+    from lineage.graph.ingester import ingest_all, ingest_python_lineage
+    parsed_sql = parse_all_sql_files("data/sql_scripts")
+    ingest_all(parsed_sql)
+    parsed_py = parse_all_python_files("data/python_scripts")
+    ingest_python_lineage(parsed_py)
     client.close()
 
 
