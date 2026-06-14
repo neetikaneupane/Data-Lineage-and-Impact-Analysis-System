@@ -59,6 +59,12 @@ def get_stats():
         "dead_count":  dead["total"]
     }
 
+@app.get("/api/tables")
+def get_tables():
+    client = Neo4jClient()
+    result = client.run("MATCH (t:Table) RETURN t.name AS name ORDER BY t.name")
+    client.close()
+    return {"tables": [r["name"] for r in result]}
 
 @app.get("/api/dead")
 def get_dead(exclude: str = "rpt_,mrt_"):
@@ -83,6 +89,43 @@ def get_downstream(table: str, column: str):
 def get_impact(table: str, column: str):
     rows = impact(table, column)
     return {"table": table, "column": column, "rows": rows}
+
+@app.get("/api/table/lineage")
+def get_table_lineage(table: str):
+    client = Neo4jClient()
+
+    upstream_tables = client.run(
+        """
+        MATCH (src:Table)-[:FEEDS]->(tgt:Table {name: $name})
+        RETURN src.name AS source_table
+        """,
+        {"name": table}
+    )
+
+    downstream_tables = client.run(
+        """
+        MATCH (src:Table {name: $name})-[:FEEDS]->(tgt:Table)
+        RETURN tgt.name AS target_table
+        """,
+        {"name": table}
+    )
+
+    columns = client.run(
+        """
+        MATCH (c:Column {table: $name})
+        RETURN c.column AS column_name
+        ORDER BY c.column
+        """,
+        {"name": table}
+    )
+
+    client.close()
+    return {
+        "table": table,
+        "upstream":   [r["source_table"] for r in upstream_tables],
+        "downstream": [r["target_table"] for r in downstream_tables],
+        "columns":    [r["column_name"] for r in columns]
+    }
 
 
 @app.post("/api/simulate/rename")
