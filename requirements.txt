@@ -7,3 +7,6 @@ neo4j
 python-dotenv
 click
 pyvis
+fastapi
+jinja2
+uvicorn

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Lineage Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1e1e2e; color: #cdd6f4; font-family: monospace; font-size: 14px; }
+
+  .topbar {
+    background: #2a2a3e;
+    border-bottom: 2px solid #2E75B6;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topbar h1 { color: #89b4fa; font-size: 18px; }
+  .topbar .refresh { color: #6c7086; font-size: 12px; }
+
+  .tabs {
+    display: flex;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    padding: 0 28px;
+  }
+  .tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    color: #6c7086;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: #cdd6f4; }
+  .tab.active { color: #89b4fa; border-bottom-color: #89b4fa; }
+
+  .content { padding: 28px; display: none; }
+  .content.active { display: block; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: #2a2a3e;
+    border: 1px solid #313244;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+  }
+  .stat-card .value { font-size: 36px; font-weight: bold; color: #89b4fa; }
+  .stat-card .label { color: #6c7086; font-size: 12px; margin-top: 4px; }
+
+  .section { background: #2a2a3e; border: 1px solid #313244; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .section h2 { color: #89b4fa; font-size: 15px; margin-bottom: 16px; border-bottom: 1px solid #313244; padding-bottom: 8px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #313244; color: #89b4fa; padding: 10px 12px; text-align: left; font-size: 12px; }
+  td { padding: 9px 12px; border-bottom: 1px solid #313244; font-size: 13px; color: #cdd6f4; }
+  tr:hover td { background: #313244; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .badge-raw    { background: #e06c7522; color: #e06c75; }
+  .badge-stg    { background: #e5c07b22; color: #e5c07b; }
+  .badge-dim    { background: #61afef22; color: #61afef; }
+  .badge-fct    { background: #61afef22; color: #61afef; }
+  .badge-mrt    { background: #98c37922; color: #98c379; }
+  .badge-rpt    { background: #c678dd22; color: #c678dd; }
+  .badge-LOW      { background: #98c37922; color: #98c379; }
+  .badge-MEDIUM   { background: #e5c07b22; color: #e5c07b; }
+  .badge-HIGH     { background: #e06c7522; color: #e06c75; }
+  .badge-CRITICAL { background: #ff000022; color: #ff6666; }
+  .badge-never_forwarded { background: #e06c7522; color: #e06c75; }
+  .badge-renamed         { background: #e5c07b22; color: #e5c07b; }
+  .badge-orphan          { background: #6c708622; color: #6c7086; }
+
+  .input-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  input, select {
+    background: #1e1e2e;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #cdd6f4;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 13px;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: #89b4fa; }
+  button {
+    background: #2E75B6;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 13px;
+  }
+  button:hover { background: #3a85c6; }
+
+  .result-box {
+    background: #181825;
+    border: 1px solid #313244;
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 12px;
+    min-height: 60px;
+  }
+
+  .depth-badge {
+    display: inline-block;
+    background: #313244;
+    color: #89b4fa;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+    margin-right: 6px;
+  }
+
+  iframe { width: 100%; height: 700px; border: none; border-radius: 8px; background: #1e1e2e; }
+
+  .layer-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .layer-chip {
+    background: #313244;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .layer-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .empty { color: #6c7086; font-style: italic; padding: 12px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Data Lineage Dashboard</h1>
+  <span class="refresh" id="refreshLabel">Auto-refresh: on</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('dead')">Dead Columns</div>
+  <div class="tab" onclick="switchTab('lineage')">Lineage Explorer</div>
+  <div class="tab" onclick="switchTab('simulator')">Schema Simulator</div>
+  <div class="tab" onclick="switchTab('visualizer')">Graph Visualizer</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="content active" id="tab-overview">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="value" id="stat-nodes">-</div><div class="label">Total Nodes</div></div>
+    <div class="stat-card"><div class="value" id="stat-edges">-</div><div class="label">Total Edges</div></div>
+    <div class="stat-card"><div class="value" id="stat-dead">-</div><div class="label">Dead Columns</div></div>
+    <div class="stat-card"><div class="value" id="stat-derives">-</div><div class="label">DERIVES_INTO Edges</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Tables by Layer</h2>
+    <div class="layer-bar" id="layer-bar"></div>
+  </div>
+
+  <div class="section">
+    <h2>Edge Type Breakdown</h2>
+    <table>
+      <thead><tr><th>Edge Type</th><th>Count</th></tr></thead>
+      <tbody id="edge-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- DEAD COLUMNS -->
+<div class="content" id="tab-dead">
+  <div class="section">
+    <h2>Dead Column Detector</h2>
+    <div class="input-row">
+      <select id="dead-exclude">
+        <option value="rpt_,mrt_">Exclude rpt_ and mrt_ (default)</option>
+        <option value="rpt_">Exclude rpt_ only</option>
+        <option value="">Show all layers</option>
+      </select>
+      <button onclick="loadDead()">Refresh</button>
+    </div>
+    <table>
+      <thead><tr><th>Table</th><th>Column</th><th>Depth</th><th>Reason</th><th>Last Touched By</th></tr></thead>
+      <tbody id="dead-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- LINEAGE EXPLORER -->
+<div class="content" id="tab-lineage">
+  <div class="section">
+    <h2>Lineage Explorer</h2>
+    <div class="input-row">
+      <input id="lin-table" placeholder="table e.g. raw_customers" style="width:220px">
+      <input id="lin-column" placeholder="column e.g. email" style="width:180px">
+      <select id="lin-mode">
+        <option value="upstream">Upstream</option>
+        <option value="downstream">Downstream</option>
+        <option value="impact">Impact</option>
+      </select>
+      <button onclick="runLineage()">Run</button>
+    </div>
+    <div class="result-box" id="lineage-result"><span class="empty">Enter a table and column above.</span></div>
+  </div>
+</div>
+
+<!-- SCHEMA SIMULATOR -->
+<div class="content" id="tab-simulator">
+  <div class="section">
+    <h2>Schema Change Simulator</h2>
+    <div class="input-row">
+      <select id="sim-type" onchange="toggleSimFields()">
+        <option value="rename">Column Rename</option>
+        <option value="type">Type Change</option>
+      </select>
+      <input id="sim-table" placeholder="table" style="width:180px">
+      <input id="sim-column" placeholder="column" style="width:150px">
+      <input id="sim-newname" placeholder="new name" style="width:150px">
+      <input id="sim-oldtype" placeholder="old type e.g. VARCHAR" style="width:150px; display:none">
+      <input id="sim-newtype" placeholder="new type e.g. NUMERIC" style="width:150px; display:none">
+      <button onclick="runSimulator()">Simulate</button>
+    </div>
+    <div class="result-box" id="sim-result"><span class="empty">Configure and run a simulation above.</span></div>
+  </div>
+</div>
+
+<!-- VISUALIZER -->
+<div class="content" id="tab-visualizer">
+  <div class="section">
+    <h2>Interactive Graph</h2>
+    <div class="input-row">
+      <select id="viz-mode">
+        <option value="table">Table Graph</option>
+        <option value="column">Column Graph</option>
+      </select>
+      <input id="viz-focus" placeholder="focus: table.column (optional)" style="width:260px">
+      <button onclick="loadVisualizer()">Load Graph</button>
+    </div>
+    <iframe id="viz-frame" src=""></iframe>
+  </div>
+</div>
+
+<script>
+const LAYER_COLORS = {
+  raw: "#e06c75", stg: "#e5c07b", dim: "#61afef",
+  fct: "#61afef", mrt: "#98c379", rpt: "#c678dd", other: "#abb2bf"
+};
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t, i) => {
+    const tabs = ["overview","dead","lineage","simulator","visualizer"];
+    t.classList.toggle("active", tabs[i] === name);
+  });
+  document.querySelectorAll(".content").forEach(c => c.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+}
+
+// --- OVERVIEW ---
+async function loadStats() {
+  const data = await fetch("/api/stats").then(r => r.json());
+  document.getElementById("stat-nodes").textContent  = data.total_nodes;
+  document.getElementById("stat-edges").textContent  = data.total_edges;
+  document.getElementById("stat-dead").textContent   = data.dead_count;
+
+  const derives = data.edge_types.find(e => e.type === "DERIVES_INTO");
+  document.getElementById("stat-derives").textContent = derives ? derives.count : 0;
+
+  const bar = document.getElementById("layer-bar");
+  bar.innerHTML = data.layer_counts.map(l =>
+    `<div class="layer-chip">
+      <div class="dot" style="background:${LAYER_COLORS[l.layer] || '#abb2bf'}"></div>
+      <span>${l.layer}</span>
+      <strong>${l.count}</strong>
+    </div>`
+  ).join("");
+
+  const tbody = document.getElementById("edge-table");
+  tbody.innerHTML = data.edge_types.map(e =>
+    `<tr><td>${e.type}</td><td>${e.count}</td></tr>`
+  ).join("");
+}
+
+// --- DEAD COLUMNS ---
+async function loadDead() {
+  const exclude = document.getElementById("dead-exclude").value;
+  const data = await fetch(`/api/dead?exclude=${encodeURIComponent(exclude)}`).then(r => r.json());
+  const tbody = document.getElementById("dead-table");
+  if (!data.columns.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">No dead columns found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.columns.map(r => {
+    const layer = r.table.split("_")[0];
+    const last  = r.source_files.length ? r.source_files[r.source_files.length - 1] : "unknown";
+    return `<tr>
+      <td><span class="badge badge-${layer}">${r.table}</span></td>
+      <td>${r.column}</td>
+      <td><span class="depth-badge">depth ${r.depth}</span></td>
+      <td><span class="badge badge-${r.reason}">${r.reason}</span></td>
+      <td style="color:#6c7086">${last}</td>
+    </tr>`;
+  }).join("");
+}
+
+// --- LINEAGE EXPLORER ---
+async function runLineage() {
+  const table  = document.getElementById("lin-table").value.trim();
+  const column = document.getElementById("lin-column").value.trim();
+  const mode   = document.getElementById("lin-mode").value;
+  const box    = document.getElementById("lineage-result");
+
+  if (!table || !column) { box.innerHTML = `<span class="empty">Enter table and column.</span>`; return; }
+  box.innerHTML = `<span class="empty">Loading...</span>`;
+
+  const data = await fetch(`/api/lineage/${mode}?table=${table}&column=${column}`).then(r => r.json());
+  const rows = data.rows;
+
+  if (!rows.length) { box.innerHTML = `<span class="empty">No results found for ${table}.${column}</span>`; return; }
+
+  const colKey   = mode === "upstream"   ? ["source_table","source_column"]
+                 : mode === "downstream" ? ["target_table","target_column"]
+                 : ["affected_table","affected_column"];
+  const fileKey  = mode === "upstream" ? "sql_files" : mode === "downstream" ? "sql_files" : "via_scripts";
+
+  box.innerHTML = `<table>
+    <thead><tr><th>Depth</th><th>Column</th><th>Via Scripts</th></tr></thead>
+    <tbody>
+      ${rows.map(r => {
+        const col   = `${r[colKey[0]]}.${r[colKey[1]]}`;
+        const layer = r[colKey[0]].split("_")[0];
+        const files = (r[fileKey] || []).join(" → ");
+        return `<tr>
+          <td><span class="depth-badge">depth ${r.depth}</span></td>
+          <td><span class="badge badge-${layer}">${col}</span></td>
+          <td style="color:#6c7086;font-size:12px">${files}</td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table>`;
+}
+
+// --- SIMULATOR ---
+function toggleSimFields() {
+  const type = document.getElementById("sim-type").value;
+  document.getElementById("sim-newname").style.display = type === "rename" ? "" : "none";
+  document.getElementById("sim-oldtype").style.display = type === "type"   ? "" : "none";
+  document.getElementById("sim-newtype").style.display = type === "type"   ? "" : "none";
+}
+
+async function runSimulator() {
+  const type   = document.getElementById("sim-type").value;
+  const table  = document.getElementById("sim-table").value.trim();
+  const column = document.getElementById("sim-column").value.trim();
+  const box    = document.getElementById("sim-result");
+
+  if (!table || !column) { box.innerHTML = `<span class="empty">Enter table and column.</span>`; return; }
+  box.innerHTML = `<span class="empty">Running simulation...</span>`;
+
+  let url, body;
+  if (type === "rename") {
+    const newName = document.getElementById("sim-newname").value.trim();
+    url  = "/api/simulate/rename";
+    body = { table, column, new_name: newName };
+  } else {
+    const oldType = document.getElementById("sim-oldtype").value.trim();
+    const newType = document.getElementById("sim-newtype").value.trim();
+    url  = "/api/simulate/type";
+    body = { table, column, old_type: oldType, new_type: newType };
+  }
+
+  const data = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(r => r.json());
+
+  if (!data.steps.length) {
+    box.innerHTML = `<span class="empty">No downstream impact found for ${table}.${column}</span>`;
+    return;
+  }
+
+  const riskBadge = data.risk_level
+    ? `<span class="badge badge-${data.risk_level}">${data.risk_level} — ${data.risk_note}</span>`
+    : "";
+
+  const orderList = data.exec_order.map((s, i) =>
+    `<span style="margin-right:8px; color:#98c379">${i+1}. ${s}</span>`
+  ).join("");
+
+  const stepsHtml = data.steps.map(s =>
+    `<tr>
+      <td><span class="depth-badge">depth ${s.depth}</span></td>
+      <td><span class="badge badge-${s.affected_table.split('_')[0]}">${s.affected_table}.${s.affected_column}</span>
+          ${s.indirect_break ? '<span style="color:#e5c07b; font-size:11px"> ⚠ indirect</span>' : ''}</td>
+      <td><span class="badge badge-${s.severity}">${s.severity}</span></td>
+      <td style="color:#6c7086; font-size:12px">${s.script}</td>
+      <td style="font-size:12px">${s.action}</td>
+    </tr>`
+  ).join("");
+
+  box.innerHTML = `
+    <div style="margin-bottom:12px">${riskBadge}</div>
+    <div style="margin-bottom:8px; color:#6c7086; font-size:12px">
+      ${data.total} column(s) affected &nbsp;|&nbsp; ${data.exec_order.length} script(s) to update
+    </div>
+    <div style="margin-bottom:12px; font-size:12px">
+      <strong style="color:#89b4fa">Execution order:</strong><br><br>${orderList}
+    </div>
+    <table>
+      <thead><tr><th>Depth</th><th>Column</th><th>Severity</th><th>Script</th><th>Action</th></tr></thead>
+      <tbody>${stepsHtml}</tbody>
+    </table>`;
+}
+
+// --- VISUALIZER ---
+function loadVisualizer() {
+  const mode  = document.getElementById("viz-mode").value;
+  const focus = document.getElementById("viz-focus").value.trim();
+  let url = `/api/visualizer?mode=${mode}`;
+  if (focus) url += `&focus=${encodeURIComponent(focus)}`;
+  document.getElementById("viz-frame").src = url;
+}
+
+// --- AUTO REFRESH ---
+let refreshInterval;
+function startAutoRefresh() {
+  loadStats();
+  loadDead();
+  refreshInterval = setInterval(() => {
+    loadStats();
+  }, 5000);
+}
+
+startAutoRefresh();
+</script>
+</body>
+</html>
