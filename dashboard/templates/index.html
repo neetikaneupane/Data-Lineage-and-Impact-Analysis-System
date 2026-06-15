@@ -605,6 +605,7 @@
         <div class="tree-item" onclick="openTab('overview','Overview','📊')"> Overview</div>
         <div class="tree-item" onclick="openTab('colsearch','Column Search','🔍')"> Column Search</div>
         <div class="tree-item" onclick="openTab('lineage','Lineage Explorer','🔭')"> Lineage Explorer</div>
+        <div class="tree-item" onclick="openTab('broken','Broken Pipeline','🔴')"> Broken Pipeline</div>
       </div>
     </div>
   </div>
@@ -772,6 +773,14 @@
   </div>
 </div>
 
+<!-- BROKEN PIPELINE -->
+<div class="panel" id="panel-broken">
+  <div class="chunk">
+    <div class="section-title">Broken Pipeline Detector</div>
+    <div id="broken-content"><div class="loading">Loading...</div></div>
+  </div>
+</div>
+
     </div>
 
     <!-- TERMINAL -->
@@ -843,6 +852,7 @@ function openTab(id, label, icon='') {
   if (id === 'lineage') {
     setTimeout(() => document.getElementById('lex-table').focus(), 100);
   }
+  if (id === 'broken') loadBrokenPipeline();
 }
 
 function openTableTab(name) {
@@ -888,7 +898,7 @@ function switchPanel(id) {
   welcome: 'welcome', overview: 'overview',
   dead: 'dead', simulator: 'simulator',
   graph: 'graph', colsearch: 'colsearch',
-  lineage: 'lineage'
+  lineage: 'lineage', broken: 'broken'
 };
   const panelId = panelMap[id] || 'table';
   const panel = document.getElementById('panel-' + panelId);
@@ -1556,6 +1566,117 @@ function buildPathViz(source, rows, tableKey, colKey, mode) {
 
   html += `</div></div>`;
   return html;
+}
+// ── BROKEN PIPELINE ──────────────────────────────────
+async function loadBrokenPipeline() {
+  const content = document.getElementById('broken-content');
+  content.innerHTML = '<div class="loading">Scanning pipeline...</div>';
+  termLog('$ lineage broken-pipeline');
+
+  const data = await fetch('/api/broken-pipeline').then(r => r.json());
+
+  termLog(`  ${data.total_phantoms} phantom source(s), ${data.total_isolated} isolated table(s)`, 'out');
+
+  const summaryHtml = `
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <div class="info-block" style="flex:1;min-width:160px">
+        <div class="ib-label">Phantom Sources</div>
+        <div class="ib-val" style="color:${data.total_phantoms > 0 ? 'var(--red)' : 'var(--green)'}">
+          ${data.total_phantoms}
+        </div>
+      </div>
+      <div class="info-block" style="flex:1;min-width:160px">
+        <div class="ib-label">Isolated Tables</div>
+        <div class="ib-val" style="color:${data.total_isolated > 0 ? 'var(--yellow)' : 'var(--green)'}">
+          ${data.total_isolated}
+        </div>
+      </div>
+      <div class="info-block" style="flex:1;min-width:160px">
+        <div class="ib-label">Pipeline Status</div>
+        <div class="ib-val" style="font-size:18px;color:${data.total_phantoms > 0 ? 'var(--red)' : 'var(--green)'}">
+          ${data.total_phantoms > 0 ? '⚠ Issues Found' : '✓ Healthy'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  let phantomHtml = '';
+  if (data.phantom_sources.length) {
+    const rows = data.phantom_sources.map(r => {
+      const scripts = r.in_scripts.join(', ');
+      const refs    = r.referenced_by.map(t =>
+        `<span style="color:var(--accent);cursor:pointer" onclick="openTableTab('${t}')">${t}</span>`
+      ).join(', ');
+      return `<tr>
+        <td style="color:var(--red)">${r.missing_table}</td>
+        <td>${refs}</td>
+        <td style="color:var(--text2);font-size:11px">${scripts}</td>
+        <td>
+          <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
+            onclick="openTableTab('${r.missing_table}')">inspect</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    phantomHtml = `
+      <div style="margin-bottom:20px">
+        <div class="section-title" style="color:var(--red);margin-bottom:10px">
+          ⚠ Phantom Sources — referenced but never created
+        </div>
+        <p style="color:var(--text2);font-size:12px;margin-bottom:12px">
+          These tables appear as inputs in SQL scripts but have no corresponding output script in the system.
+          They may be external sources, missing migrations, or typos in table names.
+        </p>
+        <table class="rt">
+          <thead><tr><th>Missing Table</th><th>Referenced By</th><th>In Scripts</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    phantomHtml = `
+      <div style="margin-bottom:20px">
+        <div class="section-title" style="color:var(--green);margin-bottom:10px">✓ No phantom sources found</div>
+        <p style="color:var(--text2);font-size:12px">Every input table has a corresponding output script.</p>
+      </div>
+    `;
+  }
+
+  let isolatedHtml = '';
+  if (data.isolated_tables.length) {
+    isolatedHtml = `
+      <div>
+        <div class="section-title" style="color:var(--yellow);margin-bottom:10px">
+          ⚡ Isolated Tables — no upstream or downstream connections
+        </div>
+        <p style="color:var(--text2);font-size:12px;margin-bottom:12px">
+          These tables exist in the graph but are not connected to any other table via FEEDS edges.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${data.isolated_tables.map(t => `
+            <div style="
+              background:var(--bg2);
+              border:1px solid var(--yellow);
+              border-radius:6px;
+              padding:6px 12px;
+              font-size:12px;
+              cursor:pointer;
+              color:var(--yellow)
+            " onclick="openTableTab('${t}')">${t}</div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else {
+    isolatedHtml = `
+      <div>
+        <div class="section-title" style="color:var(--green);margin-bottom:10px">✓ No isolated tables found</div>
+        <p style="color:var(--text2);font-size:12px">Every table is connected to the pipeline.</p>
+      </div>
+    `;
+  }
+
+  content.innerHTML = summaryHtml + phantomHtml + isolatedHtml;
 }
 
 boot();

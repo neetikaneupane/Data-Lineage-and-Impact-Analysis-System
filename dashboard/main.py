@@ -179,3 +179,38 @@ def search_column(q: str):
 
     client.close()
     return {"query": q, "results": result, "total": len(result)}
+
+@app.get("/api/broken-pipeline")
+def get_broken_pipeline():
+    client = Neo4jClient()
+
+    result = client.run(
+        """
+        MATCH (src:Table)-[r:FEEDS]->(tgt:Table)
+        WHERE NOT ()-[:FEEDS]->(src)
+          AND NOT src.name STARTS WITH 'raw_'
+        RETURN src.name AS missing_table,
+               collect(DISTINCT tgt.name) AS referenced_by,
+               collect(DISTINCT r.sql_file) AS in_scripts
+        ORDER BY src.name
+        """
+    )
+
+    # also find tables referenced in FEEDS that have no column nodes
+    orphan_tables = client.run(
+        """
+        MATCH (t:Table)
+        WHERE NOT (t)-[:FEEDS]->()
+          AND NOT ()-[:FEEDS]->(t)
+        RETURN t.name AS isolated_table
+        ORDER BY t.name
+        """
+    )
+
+    client.close()
+    return {
+        "phantom_sources": result,
+        "isolated_tables": [r["isolated_table"] for r in orphan_tables],
+        "total_phantoms":  len(result),
+        "total_isolated":  len(orphan_tables)
+    }
