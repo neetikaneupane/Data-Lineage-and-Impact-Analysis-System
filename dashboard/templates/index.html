@@ -604,6 +604,7 @@
         <div class="tree-item" onclick="openTab('graph','Graph View','🕸')"> Graph View</div>
         <div class="tree-item" onclick="openTab('overview','Overview','📊')"> Overview</div>
         <div class="tree-item" onclick="openTab('colsearch','Column Search','🔍')"> Column Search</div>
+        <div class="tree-item" onclick="openTab('lineage','Lineage Explorer','🔭')"> Lineage Explorer</div>
       </div>
     </div>
   </div>
@@ -749,6 +750,27 @@
     <div id="colsearch-results"><div class="empty-state">Type a column name to search across all tables.</div></div>
   </div>
 </div>
+<!-- LINEAGE EXPLORER -->
+<div class="panel" id="panel-lineage">
+  <div class="chunk">
+    <div class="section-title">Lineage Explorer</div>
+    <div class="inline-form" style="margin-bottom:20px">
+      <input id="lex-table"  placeholder="table e.g. raw_customers" style="width:220px">
+      <span style="color:var(--text3)">.</span>
+      <input id="lex-column" placeholder="column e.g. email" style="width:180px">
+      <select id="lex-mode">
+        <option value="upstream">Upstream</option>
+        <option value="downstream">Downstream</option>
+        <option value="impact">Impact</option>
+      </select>
+      <button class="btn" onclick="runLex()">Run</button>
+    </div>
+
+    <div id="lex-results">
+      <div class="empty-state">Enter a table and column to explore its lineage.</div>
+    </div>
+  </div>
+</div>
 
     </div>
 
@@ -818,6 +840,9 @@ function openTab(id, label, icon='') {
   if (id === 'colsearch') {
     setTimeout(() => document.getElementById('colsearch-input').focus(), 100);
   }
+  if (id === 'lineage') {
+    setTimeout(() => document.getElementById('lex-table').focus(), 100);
+  }
 }
 
 function openTableTab(name) {
@@ -862,7 +887,8 @@ function switchPanel(id) {
   const panelMap = {
   welcome: 'welcome', overview: 'overview',
   dead: 'dead', simulator: 'simulator',
-  graph: 'graph', colsearch: 'colsearch'
+  graph: 'graph', colsearch: 'colsearch',
+  lineage: 'lineage'
 };
   const panelId = panelMap[id] || 'table';
   const panel = document.getElementById('panel-' + panelId);
@@ -1326,6 +1352,210 @@ function runImpactFromSearch(table, column) {
   document.getElementById('sim-type').value  = 'rename';
   toggleSimType();
   termLog(`$ opening simulator for ${table}.${column}`);
+}
+// ── LINEAGE EXPLORER ─────────────────────────────────
+async function runLex() {
+  const table  = document.getElementById('lex-table').value.trim();
+  const column = document.getElementById('lex-column').value.trim();
+  const mode   = document.getElementById('lex-mode').value;
+  const box    = document.getElementById('lex-results');
+
+  if (!table || !column) {
+    box.innerHTML = '<div class="error-msg">Enter both table and column.</div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="loading">Running...</div>';
+  termLog(`$ lineage ${mode} ${table}.${column}`);
+
+  const data = await fetch(`/api/lineage/${mode}?table=${table}&column=${column}`)
+    .then(r => r.json());
+
+  const rows = data.rows || [];
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty-state">No ${mode} found for ${table}.${column}</div>`;
+    termLog(`  no results`, 'out');
+    return;
+  }
+
+  termLog(`  ${rows.length} result(s) found`, 'out');
+
+  // key names differ per mode
+  const tableKey  = mode === 'upstream'   ? 'source_table'   : mode === 'downstream' ? 'target_table'  : 'affected_table';
+  const colKey    = mode === 'upstream'   ? 'source_column'  : mode === 'downstream' ? 'target_column' : 'affected_column';
+  const filesKey  = mode === 'impact'     ? 'via_scripts'    : 'sql_files';
+
+  // group by depth
+  const byDepth = {};
+  rows.forEach(r => {
+    const d = r.depth;
+    if (!byDepth[d]) byDepth[d] = [];
+    byDepth[d].push(r);
+  });
+
+  // deduplicate rows by table.column (keep shallowest)
+  const seen = {};
+  const deduped = [];
+  rows.forEach(r => {
+    const key = `${r[tableKey]}.${r[colKey]}`;
+    if (!seen[key]) { seen[key] = true; deduped.push(r); }
+  });
+
+  // build path visualization
+  const source = `${table}.${column}`;
+  const pathHtml = buildPathViz(source, deduped, tableKey, colKey, mode);
+
+  // build table
+  const tableHtml = `
+    <table class="rt">
+      <thead>
+        <tr>
+          <th>Depth</th>
+          <th>${mode === 'upstream' ? 'Source' : 'Target'} Column</th>
+          <th>Layer</th>
+          <th>Via Scripts</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${deduped.map(r => {
+          const tname  = r[tableKey];
+          const cname  = r[colKey];
+          const layer  = tname.split('_')[0];
+          const files  = (r[filesKey] || []).join(' → ');
+          return `<tr>
+            <td style="color:var(--text2)">depth ${r.depth}</td>
+            <td>
+              <span style="color:var(--accent);cursor:pointer" onclick="openTableTab('${tname}')">${tname}</span>
+              <span style="color:var(--text3)">.</span>
+              <span style="color:var(--text)">${cname}</span>
+            </td>
+            <td>${layerTag(tname)}</td>
+            <td style="color:var(--text2);font-size:11px">${files}</td>
+            <td>
+              <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
+                onclick="document.getElementById('lex-table').value='${tname}';
+                         document.getElementById('lex-column').value='${cname}';
+                         runLex()">explore →</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  box.innerHTML = `
+    <div style="margin-bottom:6px;color:var(--text2);font-size:12px">
+      ${deduped.length} unique column(s) ${mode === 'upstream' ? 'feed into' : 'are fed by'} <span style="color:var(--accent)">${source}</span>
+    </div>
+    ${pathHtml}
+    <div style="margin-top:20px">${tableHtml}</div>
+  `;
+}
+
+function buildPathViz(source, rows, tableKey, colKey, mode) {
+  if (!rows.length) return '';
+
+  const byDepth = {};
+  rows.forEach(r => {
+    const d = r.depth;
+    if (!byDepth[d]) byDepth[d] = [];
+    byDepth[d].push(r);
+  });
+
+  const maxDepth = Math.max(...Object.keys(byDepth).map(Number));
+  const depths   = mode === 'upstream'
+    ? Object.keys(byDepth).map(Number).sort((a,b) => b-a)
+    : Object.keys(byDepth).map(Number).sort((a,b) => a-b);
+
+  // source node
+  const sourceLayer = source.split('.')[0].split('_')[0];
+  let html = `
+    <div style="
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      overflow-x: auto;
+    ">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">
+        ${mode === 'upstream' ? 'Sources → ' : '→ Consumers'} Path
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:0;min-width:max-content">
+  `;
+
+  if (mode !== 'upstream') {
+    // show source first
+    html += `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-right:8px">
+        <div style="
+          background:var(--bg3);
+          border:2px solid ${LC[sourceLayer]||LC.other};
+          border-radius:6px;
+          padding:6px 12px;
+          font-size:12px;
+          color:var(--accent);
+          white-space:nowrap;
+        ">${source}</div>
+        <div style="font-size:10px;color:var(--text3)">source</div>
+      </div>
+      <div style="display:flex;align-items:center;padding-top:10px;margin-right:8px;color:var(--text3)">→</div>
+    `;
+  }
+
+  depths.forEach((depth, di) => {
+    const nodes = byDepth[depth];
+    html += `
+      <div style="display:flex;flex-direction:column;gap:6px;margin-right:8px">
+        ${nodes.map(r => {
+          const tname = r[tableKey];
+          const cname = r[colKey];
+          const l     = tname.split('_')[0];
+          return `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+              <div style="
+                background:var(--bg3);
+                border:1px solid ${LC[l]||LC.other};
+                border-radius:6px;
+                padding:5px 10px;
+                font-size:11px;
+                white-space:nowrap;
+                cursor:pointer;
+              " onclick="document.getElementById('lex-table').value='${tname}';document.getElementById('lex-column').value='${cname}';runLex()">
+                <span style="color:${LC[l]||LC.other}">${tname}</span><span style="color:var(--text3)">.</span><span style="color:var(--text)">${cname}</span>
+              </div>
+              <div style="font-size:10px;color:var(--text3)">depth ${depth}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+    if (di < depths.length - 1) {
+      html += `<div style="display:flex;align-items:center;padding-top:10px;margin-right:8px;color:var(--text3)">→</div>`;
+    }
+  });
+
+  if (mode === 'upstream') {
+    html += `
+      <div style="display:flex;align-items:center;padding-top:10px;margin-right:8px;color:var(--text3)">→</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="
+          background:var(--bg3);
+          border:2px solid ${LC[sourceLayer]||LC.other};
+          border-radius:6px;
+          padding:6px 12px;
+          font-size:12px;
+          color:var(--accent);
+          white-space:nowrap;
+        ">${source}</div>
+        <div style="font-size:10px;color:var(--text3)">target</div>
+      </div>
+    `;
+  }
+
+  html += `</div></div>`;
+  return html;
 }
 
 boot();
