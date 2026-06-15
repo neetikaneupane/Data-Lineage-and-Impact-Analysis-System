@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import os
 import sys
 
@@ -11,8 +12,10 @@ from lineage.analysis.traversal import upstream, downstream, impact, dead_column
 from lineage.analysis.simulator import simulate_rename, simulate_type_change
 from lineage.analysis.visualizer import export_graph
 
-app       = FastAPI()
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+app          = FastAPI()
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+app.mount("/static", StaticFiles(directory=TEMPLATES_DIR), name="static")
+templates    = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 @app.get("/", response_class=HTMLResponse)
