@@ -606,6 +606,7 @@
         <div class="tree-item" onclick="openTab('colsearch','Column Search','🔍')"> Column Search</div>
         <div class="tree-item" onclick="openTab('lineage','Lineage Explorer','🔭')"> Lineage Explorer</div>
         <div class="tree-item" onclick="openTab('broken','Broken Pipeline','🔴')"> Broken Pipeline</div>
+        <div class="tree-item" onclick="openTab('health','Health Score','❤️')"> Health Score</div>
       </div>
     </div>
   </div>
@@ -781,6 +782,14 @@
   </div>
 </div>
 
+<!-- HEALTH SCORE -->
+<div class="panel" id="panel-health">
+  <div class="chunk">
+    <div class="section-title">Pipeline Health Score</div>
+    <div id="health-content"><div class="loading">Calculating scores...</div></div>
+  </div>
+</div>
+
     </div>
 
     <!-- TERMINAL -->
@@ -853,6 +862,7 @@ function openTab(id, label, icon='') {
     setTimeout(() => document.getElementById('lex-table').focus(), 100);
   }
   if (id === 'broken') loadBrokenPipeline();
+  if (id === 'health') loadHealth();
 }
 
 function openTableTab(name) {
@@ -898,7 +908,8 @@ function switchPanel(id) {
   welcome: 'welcome', overview: 'overview',
   dead: 'dead', simulator: 'simulator',
   graph: 'graph', colsearch: 'colsearch',
-  lineage: 'lineage', broken: 'broken'
+  lineage: 'lineage', broken: 'broken',
+  health: 'health'
 };
   const panelId = panelMap[id] || 'table';
   const panel = document.getElementById('panel-' + panelId);
@@ -1677,6 +1688,97 @@ async function loadBrokenPipeline() {
   }
 
   content.innerHTML = summaryHtml + phantomHtml + isolatedHtml;
+}
+// ── HEALTH SCORE ─────────────────────────────────────
+async function loadHealth() {
+  const content = document.getElementById('health-content');
+  content.innerHTML = '<div class="loading">Calculating health scores...</div>';
+  termLog('$ lineage health-score');
+
+  const data = await fetch('/api/health').then(r => r.json());
+  termLog(`  average score: ${data.average_score}/100 across ${data.total_tables} tables`, 'out');
+
+  const avgColor = data.average_score >= 90 ? 'var(--green)'
+                 : data.average_score >= 75 ? 'var(--accent)'
+                 : data.average_score >= 60 ? 'var(--yellow)'
+                 : 'var(--red)';
+
+  const gradeColors = { A:'var(--green)', B:'var(--accent)', C:'var(--yellow)', D:'var(--orange)', F:'var(--red)' };
+
+  const summaryHtml = `
+    <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;align-items:stretch">
+      <div class="info-block" style="text-align:center;min-width:140px">
+        <div class="ib-label">Average Score</div>
+        <div style="font-size:48px;font-weight:700;color:${avgColor};line-height:1.2">${data.average_score}</div>
+        <div style="color:var(--text2);font-size:12px">out of 100</div>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;min-width:300px">
+        ${Object.entries(data.grade_counts).map(([grade, count]) => `
+          <div class="info-block" style="text-align:center">
+            <div style="font-size:22px;font-weight:700;color:${gradeColors[grade]}">${grade}</div>
+            <div style="font-size:18px;color:var(--text)">${count}</div>
+            <div style="font-size:10px;color:var(--text2)">table(s)</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  const rows = data.scores.map(s => {
+    const scoreColor = s.score >= 90 ? 'var(--green)'
+                     : s.score >= 75 ? 'var(--accent)'
+                     : s.score >= 60 ? 'var(--yellow)'
+                     : s.score >= 40 ? 'var(--orange)'
+                     : 'var(--red)';
+
+    const barWidth = s.score;
+    const deadPct  = s.dead_ratio;
+
+    return `<tr>
+      <td style="cursor:pointer;color:var(--accent)" onclick="openTableTab('${s.table}')">${s.table}</td>
+      <td>${layerTag(s.table)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="
+            width:80px;height:6px;background:var(--border2);border-radius:3px;overflow:hidden
+          ">
+            <div style="width:${barWidth}%;height:100%;background:${scoreColor};border-radius:3px"></div>
+          </div>
+          <span style="color:${scoreColor};font-weight:700">${s.score}</span>
+          <span style="color:${gradeColors[s.grade]};font-size:11px;font-weight:700">${s.grade}</span>
+        </div>
+      </td>
+      <td style="color:${s.dead_cols > 0 ? 'var(--red)' : 'var(--green)'}">
+        ${s.dead_cols} / ${s.total_cols}
+        <span style="color:var(--text3);font-size:11px">(${deadPct}%)</span>
+      </td>
+      <td style="color:var(--text2)">↑ ${s.upstream} ↓ ${s.downstream}</td>
+      <td>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
+          onclick="openTab('dead','Dead Columns','💀'); document.getElementById('dead-exclude').value='rpt_,mrt_'; loadDeadPanel()">
+          dead cols
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    ${summaryHtml}
+    <div class="section-title" style="margin-bottom:10px">Table Scores (sorted by score ascending)</div>
+    <table class="rt">
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Layer</th>
+          <th>Score</th>
+          <th>Dead Columns</th>
+          <th>Connections</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
 
 boot();

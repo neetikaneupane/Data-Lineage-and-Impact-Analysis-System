@@ -214,3 +214,99 @@ def get_broken_pipeline():
         "total_phantoms":  len(result),
         "total_isolated":  len(orphan_tables)
     }
+
+@app.get("/api/health")
+def get_health():
+    client = Neo4jClient()
+
+    tables = client.run("MATCH (t:Table) RETURN t.name AS name ORDER BY t.name")
+
+    scores = []
+    for row in tables:
+        table = row["name"]
+
+        # total columns
+        total_cols = client.run(
+            "MATCH (c:Column {table: $t}) RETURN COUNT(c) AS count",
+            {"t": table}
+        )[0]["count"]
+
+        # dead columns
+        dead_cols = client.run(
+            """
+            MATCH (c:Column {table: $t})
+            WHERE NOT (c)-[:DERIVES_INTO]->()
+            RETURN COUNT(c) AS count
+            """,
+            {"t": table}
+        )[0]["count"]
+
+        # downstream table count
+        downstream = client.run(
+            """
+            MATCH (t:Table {name: $t})-[:FEEDS*]->(d:Table)
+            RETURN COUNT(DISTINCT d) AS count
+            """,
+            {"t": table}
+        )[0]["count"]
+
+        # upstream table count
+        upstream = client.run(
+            """
+            MATCH (u:Table)-[:FEEDS*]->(t:Table {name: $name})
+            RETURN COUNT(DISTINCT u) AS count
+            """,
+            {"name": table}
+        )[0]["count"]
+
+        # compute score
+        dead_ratio   = dead_cols / total_cols if total_cols > 0 else 0
+        dead_penalty = dead_ratio * 50
+
+        # more downstream dependents = more critical = bigger penalty for issues
+        criticality_penalty = min(dead_ratio * downstream * 3, 30)
+
+        # isolation penalty
+        isolation_penalty = 10 if upstream == 0 and downstream == 0 else 0
+
+        score = max(0, round(100 - dead_penalty - criticality_penalty - isolation_penalty))
+
+        if score >= 90:   grade = "A"
+        elif score >= 75: grade = "B"
+        elif score >= 60: grade = "C"
+        elif score >= 40: grade = "D"
+        else:             grade = "F"
+
+        layer = "other"
+        for prefix in ["raw_","stg_","dim_","fct_","mrt_","rpt_"]:
+            if table.startswith(prefix):
+                layer = prefix.rstrip("_")
+                break
+
+        scores.append({
+            "table":       table,
+            "layer":       layer,
+            "score":       score,
+            "grade":       grade,
+            "total_cols":  total_cols,
+            "dead_cols":   dead_cols,
+            "dead_ratio":  round(dead_ratio * 100),
+            "downstream":  downstream,
+            "upstream":    upstream,
+        })
+
+    client.close()
+
+    scores.sort(key=lambda x: x["score"])
+    avg = round(sum(s["score"] for s in scores) / len(scores)) if scores else 0
+
+    grade_counts = {"A":0,"B":0,"C":0,"D":0,"F":0}
+    for s in scores:
+        grade_counts[s["grade"]] += 1
+
+    return {
+        "scores":       scores,
+        "average_score": avg,
+        "grade_counts": grade_counts,
+        "total_tables": len(scores)
+    }
