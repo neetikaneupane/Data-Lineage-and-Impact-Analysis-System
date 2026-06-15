@@ -603,6 +603,7 @@
         <div class="tree-item" onclick="openTab('simulator','Simulator','⚡')"> Schema Simulator</div>
         <div class="tree-item" onclick="openTab('graph','Graph View','🕸')"> Graph View</div>
         <div class="tree-item" onclick="openTab('overview','Overview','📊')"> Overview</div>
+        <div class="tree-item" onclick="openTab('colsearch','Column Search','🔍')"> Column Search</div>
       </div>
     </div>
   </div>
@@ -639,15 +640,15 @@
               <div class="sc-desc">Search tables, run impact analysis</div>
             </div>
             <div class="shortcut-card" onclick="openTab('dead','Dead Columns','💀')">
-              <div class="sc-title">💀 Dead Columns</div>
+              <div class="sc-title"> Dead Columns</div>
               <div class="sc-desc">Find unused columns by layer</div>
             </div>
             <div class="shortcut-card" onclick="openTab('simulator','Simulator','⚡')">
-              <div class="sc-title">⚡ Schema Simulator</div>
+              <div class="sc-title"> Schema Simulator</div>
               <div class="sc-desc">Simulate renames and type changes</div>
             </div>
             <div class="shortcut-card" onclick="openTab('graph','Graph View','🕸')">
-              <div class="sc-title">🕸 Graph View</div>
+              <div class="sc-title">Graph View</div>
               <div class="sc-desc">Interactive lineage graph</div>
             </div>
           </div>
@@ -733,6 +734,21 @@
           <iframe id="graph-frame" src="about:blank"></iframe>
         </div>
       </div>
+      <!-- COLUMN SEARCH -->
+<div class="panel" id="panel-colsearch">
+  <div class="chunk">
+    <div class="section-title">Column Search</div>
+    <div class="inline-form" style="margin-bottom:20px">
+      <input id="colsearch-input" placeholder="e.g. customer_id, email, amount..."
+        style="width:300px"
+        oninput="debounceColSearch()"
+        onkeydown="if(event.key==='Enter') runColSearch()">
+      <button class="btn" onclick="runColSearch()">Search</button>
+    </div>
+    <div id="colsearch-summary" style="margin-bottom:12px; color:var(--text2); font-size:12px"></div>
+    <div id="colsearch-results"><div class="empty-state">Type a column name to search across all tables.</div></div>
+  </div>
+</div>
 
     </div>
 
@@ -751,9 +767,9 @@
 
 <!-- STATUS BAR -->
 <div class="statusbar">
-  <div class="sb-item">🔗 <strong id="sb-nodes">—</strong> nodes</div>
-  <div class="sb-item">↗ <strong id="sb-edges">—</strong> edges</div>
-  <div class="sb-item">💀 <strong id="sb-dead">—</strong> dead columns</div>
+  <div class="sb-item"> <strong id="sb-nodes">—</strong> nodes</div>
+  <div class="sb-item"> <strong id="sb-edges">—</strong> edges</div>
+  <div class="sb-item"> <strong id="sb-dead">—</strong> dead columns</div>
   <div class="sb-right">
     <div class="sb-item">Neo4j connected</div>
     <div class="sb-item" id="sb-refresh">↻ refreshing...</div>
@@ -797,9 +813,11 @@ function openTab(id, label, icon='') {
     renderTabs();
   }
   switchPanel(id);
-  if (id === 'dead')     loadDeadPanel();
-  if (id === 'overview') loadOverview();
-  if (id === 'graph')    {} // user loads manually
+  if (id === 'dead')      loadDeadPanel();
+  if (id === 'overview')  loadOverview();
+  if (id === 'colsearch') {
+    setTimeout(() => document.getElementById('colsearch-input').focus(), 100);
+  }
 }
 
 function openTableTab(name) {
@@ -842,9 +860,10 @@ function switchPanel(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   // map tab id to panel
   const panelMap = {
-    welcome: 'welcome', overview: 'overview',
-    dead: 'dead', simulator: 'simulator', graph: 'graph'
-  };
+  welcome: 'welcome', overview: 'overview',
+  dead: 'dead', simulator: 'simulator',
+  graph: 'graph', colsearch: 'colsearch'
+};
   const panelId = panelMap[id] || 'table';
   const panel = document.getElementById('panel-' + panelId);
   if (panel) panel.classList.add('active');
@@ -1214,6 +1233,99 @@ function openPaletteWith(val) {
   openPalette();
   document.getElementById('pal-input').value = val;
   updatePalette();
+}
+// ── COLUMN SEARCH ────────────────────────────────────
+let colSearchTimer = null;
+
+function debounceColSearch() {
+  clearTimeout(colSearchTimer);
+  colSearchTimer = setTimeout(runColSearch, 300);
+}
+
+async function runColSearch() {
+  const q = document.getElementById('colsearch-input').value.trim();
+  const results = document.getElementById('colsearch-results');
+  const summary = document.getElementById('colsearch-summary');
+
+  if (!q) {
+    results.innerHTML = '<div class="empty-state">Type a column name to search across all tables.</div>';
+    summary.textContent = '';
+    return;
+  }
+
+  results.innerHTML = '<div class="loading">Searching...</div>';
+  termLog(`$ lineage search-column "${q}"`);
+
+  const data = await fetch(`/api/search/column?q=${encodeURIComponent(q)}`).then(r => r.json());
+
+  if (!data.results.length) {
+    results.innerHTML = `<div class="empty-state">No columns found matching "${q}"</div>`;
+    summary.textContent = '';
+    termLog(`  no results found`, 'out');
+    return;
+  }
+
+  termLog(`  found ${data.total} match(es) across ${new Set(data.results.map(r => r.table_name)).size} table(s)`, 'out');
+  summary.textContent = `${data.total} column(s) found across ${new Set(data.results.map(r => r.table_name)).size} table(s)`;
+
+  // group by column name
+  const grouped = {};
+  data.results.forEach(r => {
+    if (!grouped[r.column_name]) grouped[r.column_name] = [];
+    grouped[r.column_name].push(r);
+  });
+
+  results.innerHTML = Object.entries(grouped).map(([colName, rows]) => `
+    <div style="margin-bottom:20px">
+      <div style="
+        font-size:13px;
+        color:var(--accent);
+        font-weight:600;
+        margin-bottom:8px;
+        padding-bottom:6px;
+        border-bottom:1px solid var(--border);
+      ">${colName} <span style="color:var(--text2);font-weight:400;font-size:11px">(${rows.length} table${rows.length>1?'s':''})</span></div>
+      <table class="rt">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Layer</th>
+            <th>Upstream</th>
+            <th>Downstream</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => {
+            const layer = r.table_name.split('_')[0];
+            const upCount   = r.upstream_count   || 0;
+            const downCount = r.downstream_count || 0;
+            return `<tr>
+              <td style="cursor:pointer;color:var(--accent)" onclick="openTableTab('${r.table_name}')">${r.table_name}</td>
+              <td>${layerTag(r.table_name)}</td>
+              <td style="color:${upCount > 0 ? 'var(--green)' : 'var(--text3)'}">↑ ${upCount}</td>
+              <td style="color:${downCount > 0 ? 'var(--accent)' : 'var(--text3)'}">↓ ${downCount}</td>
+              <td style="display:flex;gap:6px">
+                <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
+                  onclick="runImpactFromSearch('${r.table_name}','${r.column_name}')">impact</button>
+                <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
+                  onclick="openTableTab('${r.table_name}')">inspect</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `).join('');
+}
+
+function runImpactFromSearch(table, column) {
+  openTab('simulator', 'Simulator', '⚡');
+  document.getElementById('sim-table').value = table;
+  document.getElementById('sim-col').value   = column;
+  document.getElementById('sim-type').value  = 'rename';
+  toggleSimType();
+  termLog(`$ opening simulator for ${table}.${column}`);
 }
 
 boot();

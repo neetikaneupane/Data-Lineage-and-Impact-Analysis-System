@@ -155,3 +155,27 @@ def get_visualizer(mode: str = "table", focus: str = None):
     export_graph(output_path=output_path, mode=mode, focus=focus)
     with open(output_path) as f:
         return HTMLResponse(content=f.read())
+    
+
+@app.get("/api/search/column")
+def search_column(q: str):
+    client = Neo4jClient()
+
+    result = client.run(
+        """
+        MATCH (c:Column)
+        WHERE toLower(c.column) CONTAINS toLower($q)
+        WITH c.column AS column_name, c.table AS table_name
+        OPTIONAL MATCH (src:Column {column: column_name, table: table_name})-[:DERIVES_INTO]->()
+        WITH column_name, table_name, COUNT(src) AS downstream_count
+        OPTIONAL MATCH ()-[:DERIVES_INTO]->(tgt:Column {column: column_name, table: table_name})
+        RETURN column_name, table_name,
+               COUNT(tgt) AS upstream_count,
+               downstream_count
+        ORDER BY table_name, column_name
+        """,
+        {"q": q}
+    )
+
+    client.close()
+    return {"query": q, "results": result, "total": len(result)}
