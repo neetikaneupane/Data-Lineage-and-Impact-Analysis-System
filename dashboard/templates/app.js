@@ -12,13 +12,13 @@ let statsCache  = null;
 
 // ── LAYER COLOURS ──────────────────────────────────────────
 const LC = {
-  raw:   '#e46876',
-  stg:   '#c0a36e',
-  dim:   '#7e9cd8',
-  fct:   '#7e9cd8',
-  mrt:   '#76946a',
-  rpt:   '#957fb8',
-  other: '#9d9897',
+  raw:   '#c0392b',
+  stg:   '#8b5e3c',
+  dim:   '#1a3a2a',
+  fct:   '#1a3a2a',
+  mrt:   '#6b7c6e',
+  rpt:   '#4a3f6b',
+  other: '#9a9288',
 };
 
 function layerColor(name) {
@@ -158,7 +158,7 @@ async function loadOverview() {
   document.getElementById('ov-derives').textContent = derives;
 
   document.getElementById('ov-layers').innerHTML = s.layer_counts.map(l => `
-    <div style="background:#16161d;border:1px solid var(--border);border-radius:5px;padding:10px 16px;display:flex;align-items:center;gap:8px;">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:10px 16px;display:flex;align-items:center;gap:8px;">
       <div style="width:8px;height:8px;border-radius:50%;background:${LC[l.layer] || LC.other}"></div>
       <span style="color:var(--text2);font-family:var(--font-mono)">${l.layer}_</span>
       <strong style="color:var(--text);font-family:var(--font-mono)">${l.count}</strong>
@@ -194,7 +194,7 @@ async function loadTableInspector(name) {
       <h3>Columns</h3>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
         ${columns.map(c => `
-          <span style="background:#16161d;border:1px solid var(--border2);border-radius:4px;padding:3px 10px;font-size:12px;color:var(--accent);cursor:pointer;font-family:var(--font-mono)"
+          <span style="background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:3px 10px;font-size:12px;color:var(--accent);cursor:pointer;font-family:var(--font-mono)"
             onclick="openPaletteWith('${name}.${c}')">${c}</span>
         `).join('')}
       </div>
@@ -240,7 +240,7 @@ async function loadDeadPanel() {
   termLog(`  found ${data.total} dead column(s)`, 'out');
 
   const summaryHtml = Object.entries(data.summary).map(([layer, count]) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#16161d;border:1px solid var(--border);border-radius:5px;">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;">
       <div style="width:7px;height:7px;border-radius:50%;background:${LC[layer] || LC.other}"></div>
       <span style="color:var(--text2);font-family:var(--font-mono)">${layer}_</span>
       <strong style="color:var(--red);font-family:var(--font-mono)">${count}</strong>
@@ -249,7 +249,7 @@ async function loadDeadPanel() {
 
   const rows = data.columns.map(r => {
     const last = r.source_files.length ? r.source_files[r.source_files.length - 1] : 'unknown';
-    const rl   = r.reason === 'never_forwarded' ? 'var(--red)' : r.reason === 'renamed' ? 'var(--yellow)' : 'var(--text2)';
+    const rl   = r.reason === 'never_forwarded' ? 'var(--red)' : r.reason === 'renamed' ? 'var(--warm)' : 'var(--text2)';
     return `<tr>
       <td>${layerTag(r.table)} ${r.table}</td>
       <td style="color:var(--accent)">${r.column}</td>
@@ -328,7 +328,7 @@ async function runSim() {
     <tr>
       <td style="color:var(--text2)">depth ${s.depth}</td>
       <td>${layerTag(s.affected_table)} <span style="color:var(--accent)">${s.affected_table}.${s.affected_column}</span>
-        ${s.indirect_break ? '<span style="color:var(--yellow);font-size:11px;margin-left:6px">⚠ indirect</span>' : ''}
+        ${s.indirect_break ? '<span style="color:var(--warm);font-size:11px;margin-left:6px">⚠ indirect</span>' : ''}
       </td>
       <td class="sev-${s.severity}">${s.severity}</td>
       <td style="color:var(--text2);font-size:11px">${s.script}</td>
@@ -635,8 +635,8 @@ function buildPathViz(source, rows, tableKey, colKey, mode) {
   const sourceLayer = source.split('.')[0].split('_')[0];
 
   let html = `
-    <div style="background:#16161d;border:1px solid var(--border);border-radius:7px;padding:16px 20px;overflow-x:auto">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;font-family:var(--font-display)">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:16px 20px;overflow-x:auto">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;font-family:var(--font-head)">
         ${mode === 'upstream' ? 'Sources →' : '→ Consumers'} Path
       </div>
       <div style="display:flex;align-items:flex-start;gap:0;min-width:max-content">
@@ -646,7 +646,7 @@ function buildPathViz(source, rows, tableKey, colKey, mode) {
     html += `
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-right:8px">
         <div style="background:var(--bg2);border:2px solid ${LC[sourceLayer] || LC.other};border-radius:5px;padding:6px 12px;font-size:12px;color:var(--accent);white-space:nowrap;font-family:var(--font-mono)">${source}</div>
-        <div style="font-size:10px;color:var(--text3);font-family:var(--font-display)">source</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--font-head)">source</div>
       </div>
       <div style="display:flex;align-items:center;padding-top:10px;margin-right:8px;color:var(--text3)">→</div>
     `;
@@ -665,7 +665,7 @@ function buildPathViz(source, rows, tableKey, colKey, mode) {
             onclick="document.getElementById('lex-table').value='${tname}';document.getElementById('lex-column').value='${cname}';runLex()">
             <span style="color:${LC[l] || LC.other}">${tname}</span><span style="color:var(--text3)">.</span><span style="color:var(--text)">${cname}</span>
           </div>
-          <div style="font-size:10px;color:var(--text3);font-family:var(--font-display)">depth ${depth}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--font-head)">depth ${depth}</div>
         </div>
       `;
     });
@@ -680,7 +680,7 @@ function buildPathViz(source, rows, tableKey, colKey, mode) {
       <div style="display:flex;align-items:center;padding-top:10px;margin-right:8px;color:var(--text3)">→</div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
         <div style="background:var(--bg2);border:2px solid ${LC[sourceLayer] || LC.other};border-radius:5px;padding:6px 12px;font-size:12px;color:var(--accent);white-space:nowrap;font-family:var(--font-mono)">${source}</div>
-        <div style="font-size:10px;color:var(--text3);font-family:var(--font-display)">target</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--font-head)">target</div>
       </div>
     `;
   }
@@ -706,7 +706,7 @@ async function loadBrokenPipeline() {
       </div>
       <div class="info-block" style="flex:1;min-width:160px">
         <div class="ib-label">Isolated Tables</div>
-        <div class="ib-val" style="color:${data.total_isolated > 0 ? 'var(--yellow)' : 'var(--green)'}">${data.total_isolated}</div>
+        <div class="ib-val" style="color:${data.total_isolated > 0 ? 'var(--warm)' : 'var(--green)'}">${data.total_isolated}</div>
       </div>
       <div class="info-block" style="flex:1;min-width:160px">
         <div class="ib-label">Pipeline Status</div>
@@ -756,13 +756,13 @@ async function loadBrokenPipeline() {
   if (data.isolated_tables.length) {
     isolatedHtml = `
       <div>
-        <div class="section-title" style="color:var(--yellow);margin-bottom:10px">⚡ Isolated Tables — no upstream or downstream connections</div>
+        <div class="section-title" style="color:var(--warm);margin-bottom:10px">⚡ Isolated Tables — no upstream or downstream connections</div>
         <p style="color:var(--text2);font-size:12px;margin-bottom:12px;font-family:var(--font-mono)">
           These tables exist in the graph but are not connected to any other table via FEEDS edges.
         </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${data.isolated_tables.map(t => `
-            <div style="background:#16161d;border:1px solid var(--yellow);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--yellow);font-family:var(--font-mono)"
+            <div style="background:var(--bg2);border:1px solid var(--warm);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--warm);font-family:var(--font-mono)"
               onclick="openTableTab('${t}')">${t}</div>
           `).join('')}
         </div>
@@ -791,24 +791,24 @@ async function loadHealth() {
 
   const avgColor = data.average_score >= 90 ? 'var(--green)'
                  : data.average_score >= 75 ? 'var(--accent)'
-                 : data.average_score >= 60 ? 'var(--yellow)'
+                 : data.average_score >= 60 ? 'var(--warm)'
                  : 'var(--red)';
 
-  const gradeColors = { A: 'var(--green)', B: 'var(--accent)', C: 'var(--yellow)', D: 'var(--orange)', F: 'var(--red)' };
+  const gradeColors = { A: 'var(--green)', B: 'var(--accent)', C: 'var(--warm)', D: 'var(--orange)', F: 'var(--red)' };
 
   const summaryHtml = `
     <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;align-items:stretch">
       <div class="info-block" style="text-align:center;min-width:140px">
         <div class="ib-label">Average Score</div>
         <div style="font-size:48px;font-weight:700;color:${avgColor};line-height:1.2;font-family:var(--font-mono)">${data.average_score}</div>
-        <div style="color:var(--text2);font-size:12px;font-family:var(--font-display)">out of 100</div>
+        <div style="color:var(--text2);font-size:12px;font-family:var(--font-head)">out of 100</div>
       </div>
       <div style="flex:1;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;min-width:300px">
         ${Object.entries(data.grade_counts).map(([grade, count]) => `
           <div class="info-block" style="text-align:center">
             <div style="font-size:22px;font-weight:700;color:${gradeColors[grade]};font-family:var(--font-mono)">${grade}</div>
             <div style="font-size:18px;color:var(--text);font-family:var(--font-mono)">${count}</div>
-            <div style="font-size:10px;color:var(--text2);font-family:var(--font-display)">table(s)</div>
+            <div style="font-size:10px;color:var(--text2);font-family:var(--font-head)">table(s)</div>
           </div>
         `).join('')}
       </div>
@@ -818,7 +818,7 @@ async function loadHealth() {
   const rows = data.scores.map(s => {
     const scoreColor = s.score >= 90 ? 'var(--green)'
                      : s.score >= 75 ? 'var(--accent)'
-                     : s.score >= 60 ? 'var(--yellow)'
+                     : s.score >= 60 ? 'var(--warm)'
                      : s.score >= 40 ? 'var(--orange)'
                      : 'var(--red)';
     return `<tr>
