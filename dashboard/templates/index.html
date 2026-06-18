@@ -45,6 +45,7 @@
         <div class="tree-item" onclick="openTab('lineage','Lineage Explorer','🔭')"> Lineage Explorer</div>
         <div class="tree-item" onclick="openTab('broken','Broken Pipeline','🔴')"> Broken Pipeline</div>
         <div class="tree-item" onclick="openTab('health','Health Score','❤️')"> Health Score</div>
+        <div class="tree-item" onclick="openTab('diff','Impact Diff','')"> Impact Diff</div>
       </div>
     </div>
   </div>
@@ -231,6 +232,31 @@
           <div id="health-content"><div class="loading">Calculating scores...</div></div>
         </div>
       </div>
+
+      <!-- IMPACT DIFF -->
+<div class="panel" id="panel-diff">
+  <div class="chunk">
+    <div class="section-title">Impact Diff</div>
+    <div class="inline-form" style="margin-bottom:20px; flex-direction:column; align-items:flex-start; gap:12px">
+      <div style="display:flex; gap:8px; align-items:center">
+        <span style="color:var(--text2); font-size:11px; width:60px">Column A</span>
+        <input id="diff-table-a"  placeholder="table"  style="width:180px">
+        <span style="color:var(--text3)">.</span>
+        <input id="diff-col-a"    placeholder="column" style="width:160px">
+      </div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <span style="color:var(--text2); font-size:11px; width:60px">Column B</span>
+        <input id="diff-table-b"  placeholder="table"  style="width:180px">
+        <span style="color:var(--text3)">.</span>
+        <input id="diff-col-b"    placeholder="column" style="width:160px">
+      </div>
+      <button class="btn" onclick="runDiff()">Compare</button>
+    </div>
+    <div id="diff-results">
+      <div class="empty-state">Enter two columns to compare their downstream impact.</div>
+    </div>
+  </div>
+</div>
 
     </div><!-- /panels -->
 

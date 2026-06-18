@@ -326,3 +326,26 @@ def get_script(filename: str):
         content = f.read()
 
     return {"filename": safe_name, "content": content}
+
+@app.get("/api/diff")
+def get_diff(table_a: str, column_a: str, table_b: str, column_b: str):
+    rows_a = impact(table_a, column_a)
+    rows_b = impact(table_b, column_b)
+
+    set_a = {f"{r['affected_table']}.{r['affected_column']}": r for r in rows_a}
+    set_b = {f"{r['affected_table']}.{r['affected_column']}": r for r in rows_b}
+
+    shared    = sorted(set(set_a.keys()) & set(set_b.keys()))
+    only_a    = sorted(set(set_a.keys()) - set(set_b.keys()))
+    only_b    = sorted(set(set_b.keys()) - set(set_a.keys()))
+
+    return {
+        "source_a": f"{table_a}.{column_a}",
+        "source_b": f"{table_b}.{column_b}",
+        "shared":   [{"key": k, **set_a[k]} for k in shared],
+        "only_a":   [{"key": k, **set_a[k]} for k in only_a],
+        "only_b":   [{"key": k, **set_b[k]} for k in only_b],
+        "total_a":  len(set_a),
+        "total_b":  len(set_b),
+        "overlap_count": len(shared)
+    }

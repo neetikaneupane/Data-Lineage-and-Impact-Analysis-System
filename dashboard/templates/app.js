@@ -46,6 +46,7 @@ function openTab(id, label, icon = '') {
   if (id === 'lineage')   setTimeout(() => document.getElementById('lex-table').focus(), 100);
   if (id === 'broken')    loadBrokenPipeline();
   if (id === 'health')    loadHealth();
+  if (id === 'diff') setTimeout(() => document.getElementById('diff-table-a').focus(), 100);
 }
 
 function openTableTab(name) {
@@ -86,12 +87,10 @@ function switchPanel(id) {
   activeTab = id;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panelMap = {
-    welcome: 'welcome', overview: 'overview',
-    dead: 'dead',       simulator: 'simulator',
-    graph: 'graph',     colsearch: 'colsearch',
-    lineage: 'lineage', broken: 'broken',
-    health: 'health',
-  };
+  welcome: 'welcome', overview: 'overview', dead: 'dead',
+  simulator: 'simulator', graph: 'graph', colsearch: 'colsearch',
+  lineage: 'lineage', broken: 'broken', health: 'health', diff: 'diff'
+};
   const panelId = panelMap[id] || 'table';
   const panel   = document.getElementById('panel-' + panelId);
   if (panel) panel.classList.add('active');
@@ -940,5 +939,80 @@ function highlightSql(code) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('scriptOverlay').classList.remove('open');
 });
+
+// ── IMPACT DIFF ───────────────────────────────────────────────────────────────
+async function runDiff() {
+  const tableA = document.getElementById('diff-table-a').value.trim();
+  const colA   = document.getElementById('diff-col-a').value.trim();
+  const tableB = document.getElementById('diff-table-b').value.trim();
+  const colB   = document.getElementById('diff-col-b').value.trim();
+  const box    = document.getElementById('diff-results');
+
+  if (!tableA || !colA || !tableB || !colB) {
+    box.innerHTML = '<div class="error-msg">Fill in both columns.</div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="loading">Comparing impact paths...</div>';
+  termLog(`$ lineage diff ${tableA}.${colA} ${tableB}.${colB}`);
+
+  const url = `/api/diff?table_a=${tableA}&column_a=${colA}&table_b=${tableB}&column_b=${colB}`;
+  const data = await fetch(url).then(r => r.json());
+
+  termLog(`  ${data.overlap_count} shared, ${data.only_a.length} only-A, ${data.only_b.length} only-B`, 'out');
+
+  const renderGroup = (rows, color, label) => {
+    if (!rows.length) return `<div class="empty-state" style="padding:12px 0">None</div>`;
+    return `<table class="rt">
+      <thead><tr><th>Column</th><th>Layer</th><th>Depth</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td style="color:${color};cursor:pointer" onclick="openTableTab('${r.affected_table}')">
+            ${r.affected_table}.${r.affected_column}
+          </td>
+          <td>${layerTag(r.affected_table)}</td>
+          <td style="color:var(--text2)">depth ${r.depth}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  };
+
+  box.innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px">
+      <div class="info-block" style="text-align:center">
+        <div class="ib-label">A only</div>
+        <div class="ib-val" style="color:var(--accent)">${data.only_a.length}</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div class="ib-label">Shared</div>
+        <div class="ib-val" style="color:var(--gold)">${data.overlap_count}</div>
+      </div>
+      <div class="info-block" style="text-align:center">
+        <div class="ib-label">B only</div>
+        <div class="ib-val" style="color:var(--pink)">${data.only_b.length}</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px; color:var(--text2); font-size:12px; font-family:var(--font-sans)">
+      Comparing <span style="color:var(--accent)">${data.source_a}</span>
+      and <span style="color:var(--pink)">${data.source_b}</span>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div class="section-title" style="color:var(--gold)">Shared Impact (both columns affect these)</div>
+      ${renderGroup(data.shared, 'var(--gold)', 'shared')}
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div class="section-title" style="color:var(--accent)">Only ${data.source_a}</div>
+      ${renderGroup(data.only_a, 'var(--accent)', 'a')}
+    </div>
+
+    <div>
+      <div class="section-title" style="color:var(--pink)">Only ${data.source_b}</div>
+      ${renderGroup(data.only_b, 'var(--pink)', 'b')}
+    </div>
+  `;
+}
 
 boot();
