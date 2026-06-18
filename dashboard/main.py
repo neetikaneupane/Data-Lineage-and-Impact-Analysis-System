@@ -313,3 +313,16 @@ def get_health():
         "grade_counts": grade_counts,
         "total_tables": len(scores)
     }
+
+@app.get("/api/script")
+def get_script(filename: str):
+    safe_name = os.path.basename(filename)  # prevent path traversal
+    filepath  = os.path.join("data", "sql_scripts", safe_name)
+
+    if not os.path.exists(filepath):
+        return JSONResponse(status_code=404, content={"error": f"{safe_name} not found"})
+
+    with open(filepath, "r") as f:
+        content = f.read()
+
+    return {"filename": safe_name, "content": content}

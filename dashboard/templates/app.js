@@ -255,7 +255,7 @@ async function loadDeadPanel() {
       <td style="color:var(--accent)">${r.column}</td>
       <td style="color:var(--text2)">depth ${r.depth}</td>
       <td style="color:${rl}">${r.reason}</td>
-      <td style="color:var(--text2);font-size:11px">${last}</td>
+      <td style="font-size:11px"><span class="script-link" onclick="openScriptViewer('${last}')">${last}</span></td>
     </tr>`;
   }).join('');
 
@@ -315,7 +315,7 @@ async function runSim() {
 
   const execHtml = data.exec_order.map((s, i) => `
     <div class="exec-step">
-      <span class="step-num">${i + 1}. ${s}</span>
+      <span class="step-num script-link" onclick="openScriptViewer('${s}')">${i + 1}. ${s}</span>
       ${i < data.exec_order.length - 1 ? '<span class="step-arr">→</span>' : ''}
     </div>
   `).join('');
@@ -331,7 +331,7 @@ async function runSim() {
         ${s.indirect_break ? '<span style="color:var(--warm);font-size:11px;margin-left:6px">⚠ indirect</span>' : ''}
       </td>
       <td class="sev-${s.severity}">${s.severity}</td>
-      <td style="color:var(--text2);font-size:11px">${s.script}</td>
+      <td style="font-size:11px"><span class="script-link" onclick="openScriptViewer('${s.script}')">${s.script}</span></td>
       <td style="font-size:11px;color:var(--text2)">${s.rollback_action}</td>
     </tr>
   `).join('');
@@ -595,7 +595,9 @@ async function runLex() {
               <span style="color:var(--text)">${cname}</span>
             </td>
             <td>${layerTag(tname)}</td>
-            <td style="color:var(--text2);font-size:11px">${files}</td>
+            <td style="font-size:11px">${(r[filesKey] || []).map(f =>
+  `<span class="script-link" onclick="openScriptViewer('${f}')">${f}</span>`
+).join(' &#8594; ')}</td>
             <td>
               <button class="btn-ghost" style="padding:3px 8px;font-size:11px"
                 onclick="document.getElementById('lex-table').value='${tname}';
@@ -870,5 +872,73 @@ async function boot() {
   setInterval(refreshStats, 5000);
   termLog(`  graph loaded — ${statsCache?.total_nodes || '?'} nodes, ${statsCache?.total_edges || '?'} edges`, 'out');
 }
+// ── SCRIPT VIEWER ─────────────────────────────────────────────────────────────
+async function openScriptViewer(filename) {
+  document.getElementById('scriptOverlay').classList.add('open');
+  document.getElementById('scriptFilename').textContent = filename;
+  document.getElementById('scriptContent').innerHTML = 'Loading...';
+
+  termLog(`$ cat data/sql_scripts/${filename}`);
+
+  try {
+    const data = await fetch(`/api/script?filename=${encodeURIComponent(filename)}`).then(r => r.json());
+    if (data.error) {
+      document.getElementById('scriptContent').innerHTML =
+        `<span style="color:var(--red)">${data.error}</span>`;
+      termLog(`  ${data.error}`, 'err');
+      return;
+    }
+    document.getElementById('scriptContent').innerHTML = highlightSql(data.content);
+    termLog(`  loaded ${data.content.split('\\n').length} line(s)`, 'out');
+  } catch (e) {
+    document.getElementById('scriptContent').innerHTML =
+      `<span style="color:var(--red)">Failed to load script</span>`;
+  }
+}
+
+function closeScriptViewer(e) {
+  if (e.target === document.getElementById('scriptOverlay')) {
+    document.getElementById('scriptOverlay').classList.remove('open');
+  }
+}
+
+function highlightSql(code) {
+  const KEYWORDS = [
+    'SELECT','FROM','WHERE','JOIN','LEFT','RIGHT','INNER','OUTER','ON','AS',
+    'GROUP BY','ORDER BY','WITH','CREATE','TABLE','INSERT','INTO','VALUES',
+    'AND','OR','NOT','NULL','IS','IN','CASE','WHEN','THEN','ELSE','END',
+    'UNION','ALL','DISTINCT','HAVING','LIMIT','CROSS','COALESCE'
+  ];
+  const FUNCTIONS = ['COUNT','SUM','AVG','MAX','MIN','DATE','EXTRACT','LOWER','UPPER','TRIM','CAST'];
+
+  let escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // comments
+  escaped = escaped.replace(/(--.*$)/gm, '<span class="sql-com">$1</span>');
+
+  // strings
+  escaped = escaped.replace(/('[^']*')/g, '<span class="sql-str">$1</span>');
+
+  // keywords (word boundary, case-insensitive)
+  KEYWORDS.forEach(kw => {
+    const re = new RegExp(`\\b(${kw.replace(' ', '\\s+')})\\b`, 'gi');
+    escaped = escaped.replace(re, '<span class="sql-kw">$1</span>');
+  });
+
+  // functions
+  FUNCTIONS.forEach(fn => {
+    const re = new RegExp(`\\b(${fn})\\b(?=\\s*\\()`, 'gi');
+    escaped = escaped.replace(re, '<span class="sql-fn">$1</span>');
+  });
+
+  return escaped;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('scriptOverlay').classList.remove('open');
+});
 
 boot();

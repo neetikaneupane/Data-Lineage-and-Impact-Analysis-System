@@ -273,6 +273,18 @@
     <div class="palette-suggestions" id="pal-suggestions"></div>
   </div>
 </div>
+<!-- SCRIPT VIEWER -->
+<div class="script-overlay" id="scriptOverlay" onclick="closeScriptViewer(event)">
+  <div class="script-modal">
+    <div class="script-modal-header">
+      <span class="sm-filename" id="scriptFilename">script.sql</span>
+      <span class="sm-close" onclick="document.getElementById('scriptOverlay').classList.remove('open')">&times;</span>
+    </div>
+    <div class="script-modal-body">
+      <div class="script-code" id="scriptContent">Loading...</div>
+    </div>
+  </div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>
