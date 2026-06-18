@@ -86,12 +86,8 @@ A FastAPI web dashboard with:
 - Schema simulator with execution order, severity badges, and rollback
 - Embedded interactive graph visualizer
 
-<img width="1231" height="473" alt="image" src="https://github.com/user-attachments/assets/d49341bd-5787-4481-8751-5d1d89767b23" />
-<img width="1216" height="459" alt="image" src="https://github.com/user-attachments/assets/d31a3d0d-0dcd-4267-b60f-9c897369755d" />
-<img width="1244" height="468" alt="image" src="https://github.com/user-attachments/assets/f8dff9c1-7d49-4461-976f-0af433d8fec5" />
-<img width="1238" height="419" alt="image" src="https://github.com/user-attachments/assets/fa60c2c3-fbd0-415a-8831-84f51345e2ab" />
-<img width="1232" height="461" alt="image" src="https://github.com/user-attachments/assets/aad15869-bb9b-401c-a44d-0447d423e3c1" />
-<img width="1252" height="198" alt="image" src="https://github.com/user-attachments/assets/11e06a2e-dcf6-4713-9f2a-c9afa3f9defe" />
+<img width="1469" height="733" alt="image" src="https://github.com/user-attachments/assets/605ecc27-a78d-4cae-8aa7-0bac3be86bee" />
+
 
 ---
 
