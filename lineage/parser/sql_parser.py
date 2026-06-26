@@ -93,14 +93,30 @@ def _extract_column_mappings(statement) -> list[dict]:
     for expr in select.expressions:
         target_col  = _get_alias_or_name(expr)
         source_cols = _get_source_columns(expr)
+        is_direct   = _is_direct_alias(expr)
 
         if target_col:
             mappings.append({
                 "target_column":  target_col,
-                "source_columns": source_cols
+                "source_columns": source_cols,
+                "is_direct":      is_direct
             })
 
     return mappings
+
+
+def _is_direct_alias(expr) -> bool:
+    """
+    True only if this expression is a plain column reference,
+    optionally aliased — e.g. `email` or `p.created_at AS listed_at`.
+    False if wrapped in any function call, arithmetic, or CASE —
+    e.g. COUNT(x), LOWER(x), x * y, CASE WHEN ...
+    """
+    inner = expr
+    if isinstance(expr, exp.Alias):
+        inner = expr.this
+
+    return isinstance(inner, exp.Column)
 
 
 def _get_alias_or_name(expr) -> str | None:

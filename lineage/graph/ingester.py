@@ -58,7 +58,7 @@ def ingest_all(parsed_files: list[dict]):
         for mapping in mappings:
             target_col  = mapping["target_column"]
             source_cols = mapping["source_columns"]
-            is_direct   = len(source_cols) == 1
+            is_direct   = mapping.get("is_direct", False)
 
             target_node = f"{output_table}.{target_col}"
             client.run(
@@ -95,7 +95,7 @@ def ingest_all(parsed_files: list[dict]):
 
     client.close()
     print(f"Ingested {len(parsed_files)} files into Neo4j.")
-    
+
 def ingest_python_lineage(parsed_files: list[dict]):
     client = Neo4jClient()
 
