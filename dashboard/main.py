@@ -228,6 +228,14 @@ def get_health():
     for row in tables:
         table = row["name"]
 
+        layer = "other"
+        for prefix in ["raw_", "stg_", "dim_", "fct_", "mrt_", "rpt_"]:
+            if table.startswith(prefix):
+                layer = prefix.rstrip("_")
+                break
+
+        is_terminal = layer == "rpt"
+
         # total columns
         total_cols = client.run(
             "MATCH (c:Column {table: $t}) RETURN COUNT(c) AS count",
@@ -262,29 +270,29 @@ def get_health():
             {"name": table}
         )[0]["count"]
 
-        # compute score
-        dead_ratio   = dead_cols / total_cols if total_cols > 0 else 0
-        dead_penalty = dead_ratio * 50
+        dead_ratio = dead_cols / total_cols if total_cols > 0 else 0
 
-        # more downstream dependents = more critical = bigger penalty for issues
-        criticality_penalty = min(dead_ratio * downstream * 3, 30)
+        if is_terminal:
+            # terminal tables are expected to have 0 downstream and
+            # therefore "100% dead" columns by definition — that is not
+            # a quality issue, so they are scored on connectivity only,
+            # not on dead-column ratio
+            score = 100 if upstream > 0 else 70
+            grade = "A" if score >= 90 else "C"
+        else:
+            dead_penalty = dead_ratio * 50
+            # more downstream dependents = more critical = bigger penalty for issues
+            criticality_penalty = min(dead_ratio * downstream * 3, 30)
+            # isolation penalty
+            isolation_penalty = 10 if upstream == 0 and downstream == 0 else 0
 
-        # isolation penalty
-        isolation_penalty = 10 if upstream == 0 and downstream == 0 else 0
+            score = max(0, round(100 - dead_penalty - criticality_penalty - isolation_penalty))
 
-        score = max(0, round(100 - dead_penalty - criticality_penalty - isolation_penalty))
-
-        if score >= 90:   grade = "A"
-        elif score >= 75: grade = "B"
-        elif score >= 60: grade = "C"
-        elif score >= 40: grade = "D"
-        else:             grade = "F"
-
-        layer = "other"
-        for prefix in ["raw_","stg_","dim_","fct_","mrt_","rpt_"]:
-            if table.startswith(prefix):
-                layer = prefix.rstrip("_")
-                break
+            if score >= 90:   grade = "A"
+            elif score >= 75: grade = "B"
+            elif score >= 60: grade = "C"
+            elif score >= 40: grade = "D"
+            else:             grade = "F"
 
         scores.append({
             "table":       table,
@@ -296,6 +304,7 @@ def get_health():
             "dead_ratio":  round(dead_ratio * 100),
             "downstream":  downstream,
             "upstream":    upstream,
+            "is_terminal": is_terminal,
         })
 
     client.close()
@@ -303,15 +312,15 @@ def get_health():
     scores.sort(key=lambda x: x["score"])
     avg = round(sum(s["score"] for s in scores) / len(scores)) if scores else 0
 
-    grade_counts = {"A":0,"B":0,"C":0,"D":0,"F":0}
+    grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
     for s in scores:
         grade_counts[s["grade"]] += 1
 
     return {
-        "scores":       scores,
+        "scores":        scores,
         "average_score": avg,
-        "grade_counts": grade_counts,
-        "total_tables": len(scores)
+        "grade_counts":  grade_counts,
+        "total_tables":  len(scores)
     }
 
 @app.get("/api/script")
