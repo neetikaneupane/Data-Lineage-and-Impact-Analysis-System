@@ -73,17 +73,14 @@ def dead_columns(exclude_layers: list[str] = None) -> dict:
         OPTIONAL MATCH path = (root:Column)-[:DERIVES_INTO*]->(c)
         WHERE NOT ()-[:DERIVES_INTO]->(root)
         OPTIONAL MATCH (src)-[r:DERIVES_INTO]->(c)
-        RETURN c.table AS table_name,
+        RETURN c.id AS col_id,
+               c.table AS table_name,
                c.column AS column_name,
                collect(DISTINCT r.sql_file) AS source_files,
                COALESCE(MAX(length(path)), 0) AS depth
         ORDER BY depth ASC, c.table, c.column
         """
     )
-
-    # collect all column names that exist anywhere downstream
-    all_cols = client.run("MATCH (c:Column) RETURN c.column AS column_name")
-    all_downstream_columns = set(r["column_name"] for r in all_cols)
 
     client.close()
 
@@ -96,7 +93,9 @@ def dead_columns(exclude_layers: list[str] = None) -> dict:
         source_files = [f for f in row["source_files"] if f]
         depth        = row["depth"]
         column       = row["column_name"]
-        reason       = _classify_dead_column(table, column, source_files, depth, all_downstream_columns)
+        col_id       = row["col_id"]
+
+        reason = _classify_dead_column(col_id, column, source_files, depth)
 
         filtered.append({
             "table":        table,
@@ -126,13 +125,46 @@ def _get_layer(table_name: str) -> str:
             return prefix.rstrip("_")
     return "other"
 
-def _classify_dead_column(table: str, column: str, source_files: list, depth: int, all_downstream_columns: set) -> str:
+
+def _classify_dead_column(col_id: str, column: str, source_files: list, depth: int) -> str:
     if not source_files and depth == 0:
         return "orphan"
 
-    # check if a renamed version exists downstream
-    for downstream_col in all_downstream_columns:
-        if column in downstream_col and downstream_col != column:
+    # find this column's root ancestor (the original raw_ column it traces back to)
+    client = Neo4jClient()
+    root_rows = client.run(
+        """
+        MATCH path = (root:Column)-[:DERIVES_INTO*]->(c:Column {id: $id})
+        WHERE NOT ()-[:DERIVES_INTO]->(root)
+        RETURN root.id AS root_id
+        ORDER BY length(path) DESC
+        LIMIT 1
+        """,
+        {"id": col_id}
+    )
+
+    if not root_rows:
+        client.close()
+        return "never_forwarded"
+
+    root_id = root_rows[0]["root_id"]
+
+    # check if any OTHER column sharing the same root ancestor has a different
+    # name that contains this column's name — that is a real rename signal,
+    # not just an unrelated column elsewhere in the graph
+    sibling_rows = client.run(
+        """
+        MATCH (root:Column {id: $root_id})-[:DERIVES_INTO*]->(other:Column)
+        WHERE other.column <> $column
+        RETURN DISTINCT other.column AS other_column
+        """,
+        {"root_id": root_id, "column": column}
+    )
+    client.close()
+
+    for row in sibling_rows:
+        other_col = row["other_column"]
+        if column in other_col or other_col in column:
             return "renamed"
 
     return "never_forwarded"
