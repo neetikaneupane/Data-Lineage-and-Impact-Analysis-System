@@ -136,11 +136,10 @@ def _classify_dead_column(col_id: str, column: str, source_files: list, depth: i
     last_script = source_files[-1]
 
     client = Neo4jClient()
-
-    # find the column(s) that directly feed INTO this dead column, via the same script
     direct_parents = client.run(
         """
         MATCH (parent:Column)-[r:DERIVES_INTO {sql_file: $file}]->(c:Column {id: $id})
+        WHERE r.is_direct = true
         RETURN parent.column AS parent_column
         """,
         {"id": col_id, "file": last_script}
@@ -148,11 +147,7 @@ def _classify_dead_column(col_id: str, column: str, source_files: list, depth: i
     client.close()
 
     for row in direct_parents:
-        parent_col = row["parent_column"]
-        # a rename means the parent column name differs from this column's name,
-        # via the exact same script, with no other transformation logic implied
-        # (this is a direct 1:1 alias, not a derived/joined column)
-        if parent_col != column:
+        if row["parent_column"] != column:
             return "renamed"
 
     return "never_forwarded"

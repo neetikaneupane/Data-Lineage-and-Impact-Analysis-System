@@ -58,6 +58,7 @@ def ingest_all(parsed_files: list[dict]):
         for mapping in mappings:
             target_col  = mapping["target_column"]
             source_cols = mapping["source_columns"]
+            is_direct   = len(source_cols) == 1
 
             target_node = f"{output_table}.{target_col}"
             client.run(
@@ -87,14 +88,14 @@ def ingest_all(parsed_files: list[dict]):
                         """
                         MATCH (src:Column {id: $src})
                         MATCH (tgt:Column {id: $tgt})
-                        MERGE (src)-[:DERIVES_INTO {sql_file: $file}]->(tgt)
+                        MERGE (src)-[:DERIVES_INTO {sql_file: $file, is_direct: $is_direct}]->(tgt)
                         """,
-                        {"src": source_node, "tgt": target_node, "file": sql_file}
+                        {"src": source_node, "tgt": target_node, "file": sql_file, "is_direct": is_direct}
                     )
 
     client.close()
     print(f"Ingested {len(parsed_files)} files into Neo4j.")
-
+    
 def ingest_python_lineage(parsed_files: list[dict]):
     client = Neo4jClient()
 
