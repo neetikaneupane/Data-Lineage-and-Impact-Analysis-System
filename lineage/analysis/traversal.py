@@ -130,41 +130,29 @@ def _classify_dead_column(col_id: str, column: str, source_files: list, depth: i
     if not source_files and depth == 0:
         return "orphan"
 
-    # find this column's root ancestor (the original raw_ column it traces back to)
-    client = Neo4jClient()
-    root_rows = client.run(
-        """
-        MATCH path = (root:Column)-[:DERIVES_INTO*]->(c:Column {id: $id})
-        WHERE NOT ()-[:DERIVES_INTO]->(root)
-        RETURN root.id AS root_id
-        ORDER BY length(path) DESC
-        LIMIT 1
-        """,
-        {"id": col_id}
-    )
-
-    if not root_rows:
-        client.close()
+    if not source_files:
         return "never_forwarded"
 
-    root_id = root_rows[0]["root_id"]
+    last_script = source_files[-1]
 
-    # check if any OTHER column sharing the same root ancestor has a different
-    # name that contains this column's name — that is a real rename signal,
-    # not just an unrelated column elsewhere in the graph
-    sibling_rows = client.run(
+    client = Neo4jClient()
+
+    # find the column(s) that directly feed INTO this dead column, via the same script
+    direct_parents = client.run(
         """
-        MATCH (root:Column {id: $root_id})-[:DERIVES_INTO*]->(other:Column)
-        WHERE other.column <> $column
-        RETURN DISTINCT other.column AS other_column
+        MATCH (parent:Column)-[r:DERIVES_INTO {sql_file: $file}]->(c:Column {id: $id})
+        RETURN parent.column AS parent_column
         """,
-        {"root_id": root_id, "column": column}
+        {"id": col_id, "file": last_script}
     )
     client.close()
 
-    for row in sibling_rows:
-        other_col = row["other_column"]
-        if column in other_col or other_col in column:
+    for row in direct_parents:
+        parent_col = row["parent_column"]
+        # a rename means the parent column name differs from this column's name,
+        # via the exact same script, with no other transformation logic implied
+        # (this is a direct 1:1 alias, not a derived/joined column)
+        if parent_col != column:
             return "renamed"
 
     return "never_forwarded"
